@@ -74,3 +74,46 @@ tasks.jar {
 tasks.test {
     useJUnitPlatform()
 }
+
+val ili2gpkgVersion = providers.gradleProperty("ili2gpkgVersion")
+val ilitoolsHome = layout.projectDirectory.dir("ilitools")
+val ili2gpkgHome = ilitoolsHome.dir("ili2gpkg")
+
+// Downloads ili2gpkg into ./ilitools for local development.
+// The version is taken from the ili2gpkgVersion project property (see gradle.properties).
+tasks.register("downloadIli2gpkg") {
+    group = "ilitools"
+    description = "Downloads ili2gpkg into ./ilitools for local development"
+
+    val targetDir = ili2gpkgHome
+
+    inputs.property("version", ili2gpkgVersion)
+    outputs.dir(targetDir)
+
+    doLast {
+        val version = ili2gpkgVersion.orNull ?: throw GradleException("Set -Pili2gpkgVersion=<version>.")
+
+        val downloadUrl = uri("https://downloads.interlis.ch/ili2gpkg/ili2gpkg-$version.zip")
+        val zipFile = temporaryDir.resolve("ili2gpkg-$version.zip")
+
+        logger.lifecycle("Downloading $downloadUrl")
+        downloadUrl.toURL().openStream().use { input ->
+            zipFile.outputStream().use { output -> input.copyTo(output) }
+        }
+
+        val dir = targetDir.asFile
+        delete(dir)
+        copy {
+            from(zipTree(zipFile))
+            into(dir)
+        }
+        logger.lifecycle("Extracted ili2gpkg $version into $dir")
+    }
+}
+
+// Automatically download and set up the ilitools on `gradlew run`.
+tasks.named<JavaExec>("run") {
+    dependsOn("downloadIli2gpkg")
+    environment("ILI2GPKG_HOME", ili2gpkgHome.asFile.absolutePath)
+    environment("ILI2GPKG_VERSION", ili2gpkgVersion.get())
+}
