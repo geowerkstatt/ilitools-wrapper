@@ -6,6 +6,9 @@
 <!-- https://checkstyle.org/filters/suppressionfilter.html -->
 <suppressions>
 
+    <!-- Disable checks for files generated from proto -->
+    <suppress checks="[a-zA-Z0-9]*" files="[\\/]generated[\\/]sources[\\/]proto[\\/]" />
+
     <!-- Disable some checks for test classes -->
     <suppress checks="\w*Javadoc\w+Check|LineLengthCheck|VisibilityModifierCheck" files="[\\/]test[\\/]java[\\/]" />
 

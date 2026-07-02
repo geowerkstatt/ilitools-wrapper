@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg";
+option java_outer_classname = "Ili2gpkgProto";
+
+package ilitoolswrapper.ili2gpkg;
+
+service Ili2gpkgService {
+  rpc Convert(stream ConvertRequest) returns (stream StatusUpdate) {}
+}
+
+enum ConvertOperation {
+  OPERATION_SCHEMA_IMPORT = 0;
+  OPERATION_IMPORT = 1;
+  OPERATION_EXPORT = 2;
+}
+
+message FileStart {
+  string fileExtension = 1;
+}
+
+message ConvertRequestInfo {
+  ConvertOperation operation = 1;
+}
+
+message ConvertRequest {
+  oneof payload {
+    ConvertRequestInfo info = 1;
+    FileStart fileStart = 2;
+    bytes chunk = 3;
+  }
+}
+
+message StatusUpdate {
+  string message = 1;
+}
