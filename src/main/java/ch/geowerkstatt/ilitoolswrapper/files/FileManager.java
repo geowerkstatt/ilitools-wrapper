@@ -1,7 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
 /**
- * Creates {@link ChunkedFile}s that accept uploaded content in successive chunks.
+ * Creates {@link ProcessingFile}s that are used as temporary files during processing.
  */
 public interface FileManager {
     /**
@@ -10,9 +10,8 @@ public interface FileManager {
      * @param folderName    the directory the file is created in, automatically created if it does not exist
      * @param fileName      the file name without extension
      * @param fileExtension the file extension without the leading dot
-     * @return a {@link ChunkedFile} the caller writes to and then closes
+     * @return a {@link ProcessingFile} the caller can write to
      * @throws IllegalArgumentException if {@code fileExtension} is invalid
-     * @throws Exception                if the file cannot be created
      */
-    ChunkedFile createChunkedFile(String folderName, String fileName, String fileExtension) throws Exception;
+    ProcessingFile createProcessingFile(String folderName, String fileName, String fileExtension);
 }

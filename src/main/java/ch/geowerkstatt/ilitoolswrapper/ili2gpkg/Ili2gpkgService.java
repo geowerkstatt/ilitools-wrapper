@@ -1,7 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
-import ch.geowerkstatt.ilitoolswrapper.files.ChunkedFile;
 import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
+import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.FileStart;
@@ -37,7 +37,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     private final class ConvertObserver implements StreamObserver<ConvertRequest> {
         private final StreamObserver<StatusUpdate> responseObserver;
         private final UUID sessionId = UUID.randomUUID();
-        private final List<ChunkedFile> files = new ArrayList<>();
+        private final List<ProcessingFile> files = new ArrayList<>();
         private ConvertRequestInfo info;
 
         ConvertObserver(StreamObserver<StatusUpdate> responseObserver) {
@@ -77,7 +77,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
             try {
                 int fileNumber = files.size() + 1;
-                ChunkedFile file = fileManager.createChunkedFile(sessionId.toString(), "file" + fileNumber, fileStart.getFileExtension());
+                ProcessingFile file = fileManager.createProcessingFile(sessionId.toString(), "file" + fileNumber, fileStart.getFileExtension());
                 files.add(file);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());
@@ -103,8 +103,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             LOGGER.fine("Received chunk of size: " + chunk.size());
 
             try {
-                ChunkedFile file = files.getLast();
-                file.writeChunk(chunk);
+                ProcessingFile file = files.getLast();
+                chunk.writeTo(file.outputStream());
             } catch (Exception e) {
                 LOGGER.warning("Failed to write chunk to file: " + e.getMessage());
                 responseObserver.onError(e);
@@ -127,9 +127,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 return;
             }
 
-            for (ChunkedFile file : files) {
+            for (ProcessingFile file : files) {
                 try {
-                    file.close();
+                    file.closeOutputStream();
                 } catch (Exception e) {
                     LOGGER.warning("Failed to close output file: " + e.getMessage());
                     responseObserver.onError(e);
@@ -144,7 +144,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         }
 
         private void deleteFiles() {
-            for (ChunkedFile file : files) {
+            for (ProcessingFile file : files) {
                 try {
                     file.delete();
                 } catch (Exception e) {

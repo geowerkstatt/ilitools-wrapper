@@ -1,35 +1,36 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * In-memory {@link FileManager} that hands out {@link InMemoryChunkedFile}s and records every creation request,
+ * In-memory {@link FileManager} that hands out {@link InMemoryProcessingFile}s and records every creation request,
  * so tests can inspect the received content and arguments without writing anything to disk.
  */
 public final class InMemoryFileManager implements FileManager {
-    private final List<InMemoryChunkedFile> createdFiles = new ArrayList<>();
-    private Exception failure;
+    private final List<InMemoryProcessingFile> createdFiles = new ArrayList<>();
+    private RuntimeException failure;
 
-    public void failNextCreationWith(Exception exception) {
+    public void failNextCreationWith(RuntimeException exception) {
         this.failure = exception;
     }
 
     @Override
-    public ChunkedFile createChunkedFile(String folderName, String fileName, String fileExtension) throws Exception {
+    public ProcessingFile createProcessingFile(String folderName, String fileName, String fileExtension) {
         if (failure != null) {
             throw failure;
         }
-        InMemoryChunkedFile file = new InMemoryChunkedFile();
+        InMemoryProcessingFile file = new InMemoryProcessingFile(Paths.get(folderName, fileName + "." + fileExtension));
         createdFiles.add(file);
         return file;
     }
 
-    public List<InMemoryChunkedFile> createdFiles() {
+    public List<InMemoryProcessingFile> createdFiles() {
         return createdFiles;
     }
 
-    public InMemoryChunkedFile lastCreatedFile() {
+    public InMemoryProcessingFile lastCreatedFile() {
         return createdFiles.getLast();
     }
 }

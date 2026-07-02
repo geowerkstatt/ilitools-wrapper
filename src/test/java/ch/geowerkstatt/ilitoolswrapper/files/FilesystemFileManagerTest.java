@@ -11,17 +11,17 @@ public final class FilesystemFileManagerTest {
 
     @ParameterizedTest
     @NullAndEmptySource
-    void createChunkedFileRejectsMissingExtension(String fileExtension) {
+    void createProcessingFileRejectsMissingExtension(String fileExtension) {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> fileManager.createChunkedFile("folder", "upload", fileExtension));
+                () -> fileManager.createProcessingFile("folder", "upload", fileExtension));
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"../etc", "x.tf", "xtf ", "x/f", "x.", "."})
-    void createChunkedFileRejectsNonAlphanumericExtension(String fileExtension) {
+    void createProcessingFileRejectsNonAlphanumericExtension(String fileExtension) {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> fileManager.createChunkedFile("folder", "upload", fileExtension));
+                () -> fileManager.createProcessingFile("folder", "upload", fileExtension));
     }
 }

@@ -1,18 +1,15 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
 public final class FilesystemFileManager implements FileManager {
     @Override
-    public ChunkedFile createChunkedFile(String folderName, String fileName, String fileExtension) throws Exception {
+    public ProcessingFile createProcessingFile(String folderName, String fileName, String fileExtension) {
         checkFileExtension(fileExtension);
 
-        Path directoryPath = Paths.get(folderName);
-        Files.createDirectories(directoryPath);
-        Path filePath = directoryPath.resolve(fileName + "." + fileExtension);
-        return new FilesystemChunkedFile(filePath);
+        Path filePath = Paths.get(folderName, fileName + "." + fileExtension);
+        return new FilesystemProcessingFile(filePath);
     }
 
     private void checkFileExtension(String fileExtension) {
