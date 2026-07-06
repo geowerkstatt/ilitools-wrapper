@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,13 +27,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class Ili2gpkgServiceTest {
     private InMemoryFileManager fileManager;
+    private IlitoolsRunnerMock ilitoolsRunner;
     private Ili2gpkgService service;
     private RecordingStreamObserver<StatusUpdate> responseObserver;
 
     @BeforeEach
     void setUp() {
         fileManager = new InMemoryFileManager();
-        service = new Ili2gpkgService(fileManager, new IlitoolsRunnerMock());
+        ilitoolsRunner = new IlitoolsRunnerMock();
+        service = new Ili2gpkgService(fileManager, ilitoolsRunner);
         responseObserver = new RecordingStreamObserver<>();
     }
 
@@ -97,6 +100,65 @@ public final class Ili2gpkgServiceTest {
     }
 
     @Test
+    void convertPassesInfoOptionsAsArguments() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_SCHEMA_IMPORT)
+                        .addModels("ModelA")
+                        .addModels("ModelB")
+                        .setDefaultSrsCode(2056)
+                        .setDisableValidation(true)
+                        .setCreateBasketCol(true)
+                        .setSqlEnableNull(true)
+                        .setSkipReferenceErrors(true)
+                        .setSkipGeometryErrors(true)
+                        .setImportTid(true)
+                        .setStrokeArcs(true))
+                .build());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        List<String> args = ilitoolsRunner.lastArguments();
+        assertNotNull(args, "The runner should have been invoked.");
+        assertArgumentWithValue(args, "--models", "ModelA;ModelB");
+        assertArgumentWithValue(args, "--defaultSrsCode", "2056");
+        assertTrue(args.contains("--disableValidation"));
+        assertTrue(args.contains("--createBasketCol"));
+        assertTrue(args.contains("--sqlEnableNull"));
+        assertTrue(args.contains("--skipReferenceErrors"));
+        assertTrue(args.contains("--skipGeometryErrors"));
+        assertTrue(args.contains("--importTid"));
+        assertTrue(args.contains("--strokeArcs"));
+    }
+
+    @Test
+    void convertOmitsDisabledInfoOptions() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        List<String> args = ilitoolsRunner.lastArguments();
+        assertNotNull(args, "The runner should have been invoked.");
+        assertFalse(args.contains("--models"));
+        assertFalse(args.contains("--defaultSrsCode"));
+        assertFalse(args.contains("--disableValidation"));
+        assertFalse(args.contains("--createBasketCol"));
+        assertFalse(args.contains("--sqlEnableNull"));
+        assertFalse(args.contains("--skipReferenceErrors"));
+        assertFalse(args.contains("--skipGeometryErrors"));
+        assertFalse(args.contains("--importTid"));
+        assertFalse(args.contains("--strokeArcs"));
+    }
+
+    @Test
     void chunkBeforeInfoIsRejected() {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
@@ -147,6 +209,13 @@ public final class Ili2gpkgServiceTest {
 
         assertNotNull(responseObserver.error());
         assertTrue(fileManager.createdFiles().isEmpty());
+    }
+
+    private static void assertArgumentWithValue(List<String> args, String name, String value) {
+        int index = args.indexOf(name);
+        assertTrue(index >= 0, "Expected argument " + name + " to be present.");
+        assertTrue(index + 1 < args.size(), "Expected a value after " + name + ".");
+        assertEquals(value, args.get(index + 1), "Unexpected value for " + name + ".");
     }
 
     private static Status.Code statusCodeOf(Throwable error) {

@@ -20,7 +20,7 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
 
         Process process = processBuilder.start();
         return process.onExit()
-                .thenCompose(p -> p.exitValue() == 0 ? null : CompletableFuture.failedStage(new RuntimeException(tool + " exited with code " + p.exitValue())));
+                .thenCompose(p -> p.exitValue() == 0 ? CompletableFuture.completedStage(null) : CompletableFuture.failedStage(new RuntimeException(tool + " exited with code " + p.exitValue())));
     }
 
     private List<String> buildCommand(Tool tool, List<String> args) {

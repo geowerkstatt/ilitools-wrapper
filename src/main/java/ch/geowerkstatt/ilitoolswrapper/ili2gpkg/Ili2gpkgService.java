@@ -226,8 +226,32 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             args.add("--dbfile");
             args.add(dbFile.filePath().toAbsolutePath().toString());
 
+            if (info.getModelsCount() > 0) {
+                args.add("--models");
+                args.add(String.join(";", info.getModelsList()));
+            }
+
+            if (info.getDefaultSrsCode() > 0) {
+                args.add("--defaultSrsCode");
+                args.add(Integer.toString(info.getDefaultSrsCode()));
+            }
+
+            addFlag(args, "--disableValidation", info.getDisableValidation());
+            addFlag(args, "--createBasketCol", info.getCreateBasketCol());
+            addFlag(args, "--sqlEnableNull", info.getSqlEnableNull());
+            addFlag(args, "--skipReferenceErrors", info.getSkipReferenceErrors());
+            addFlag(args, "--skipGeometryErrors", info.getSkipGeometryErrors());
+            addFlag(args, "--importTid", info.getImportTid());
+            addFlag(args, "--strokeArcs", info.getStrokeArcs());
+
             args.add(subject.filePath().toAbsolutePath().toString());
             return new ProcessingArguments(dbFile, args);
+        }
+
+        private static void addFlag(List<String> args, String flag, boolean enabled) {
+            if (enabled) {
+                args.add(flag);
+            }
         }
     }
 }
