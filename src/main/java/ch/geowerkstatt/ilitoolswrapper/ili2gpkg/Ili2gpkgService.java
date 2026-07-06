@@ -1,5 +1,6 @@
 package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
@@ -12,22 +13,30 @@ import com.google.protobuf.ByteString;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
 public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceImplBase {
+    private record ProcessingArguments(ProcessingFile outputFile, List<String> arguments) { }
+
     private static final Logger LOGGER = Logger.getLogger(Ili2gpkgService.class.getName());
     private final FileManager fileManager;
+    private final IlitoolsRunner ilitoolsRunner;
 
     /**
      * Creates a new {@link Ili2gpkgService} with the specified file manager.
      *
      * @param fileManager the FileManager to use for managing temporary files
+     * @param ilitoolsRunner the IlitoolsRunner to use for running the ili2gpkg tool
      */
-    public Ili2gpkgService(FileManager fileManager) {
+    public Ili2gpkgService(FileManager fileManager, IlitoolsRunner ilitoolsRunner) {
         this.fileManager = fileManager;
+        this.ilitoolsRunner = ilitoolsRunner;
     }
 
     @Override
@@ -155,10 +164,17 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
             }
 
-            processData();
-            deleteFiles();
-            responseObserver.onNext(StatusUpdate.newBuilder().setMessage("Conversion completed.").build());
-            responseObserver.onCompleted();
+            processData().thenAcceptAsync(_ -> {
+                deleteFiles();
+                responseObserver.onNext(StatusUpdate.newBuilder().setMessage("Conversion completed.").build());
+                responseObserver.onCompleted();
+            }).exceptionallyAsync(t -> {
+                LOGGER.warning("Processing data with ili2gpkg failed: " + t);
+                deleteFiles();
+                responseObserver.onNext(StatusUpdate.newBuilder().setMessage("Conversion failed.").build());
+                responseObserver.onCompleted();
+                return null;
+            });
         }
 
         private void cancelWithError(Status status) {
@@ -174,8 +190,44 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
         }
 
-        private void processData() {
+        private CompletableFuture<Void> processData() {
             LOGGER.fine("Processing data with ili2gpkg.");
+            ProcessingArguments arguments = convertRequestToArguments();
+            try {
+                return ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, arguments.arguments);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        private ProcessingArguments convertRequestToArguments() {
+            ProcessingFile subject;
+            ProcessingFile dbFile;
+            List<String> args = new ArrayList<>();
+            switch (info.getOperation()) {
+                case OPERATION_SCHEMA_IMPORT -> {
+                    subject = files.get(Ili2gpkgFileType.MODEL_FILE);
+                    dbFile = fileManager.createProcessingFile(sessionId.toString(), "output", "gpkg");
+                    args.add("--schemaimport");
+                }
+                case OPERATION_IMPORT -> {
+                    subject = files.get(Ili2gpkgFileType.TRANSFER_FILE);
+                    dbFile = files.get(Ili2gpkgFileType.DB_FILE);
+                    args.add("--import");
+                }
+                case OPERATION_EXPORT -> {
+                    subject = fileManager.createProcessingFile(sessionId.toString(), "output", "xtf");
+                    dbFile = files.get(Ili2gpkgFileType.DB_FILE);
+                    args.add("--export");
+                }
+                default -> throw new IllegalArgumentException("Unsupported operation: " + info.getOperation());
+            }
+
+            args.add("--dbfile");
+            args.add(dbFile.filePath().toAbsolutePath().toString());
+
+            args.add(subject.filePath().toAbsolutePath().toString());
+            return new ProcessingArguments(dbFile, args);
         }
     }
 }

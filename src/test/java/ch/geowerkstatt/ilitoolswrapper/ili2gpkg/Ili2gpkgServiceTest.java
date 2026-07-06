@@ -1,5 +1,6 @@
 package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunnerMock;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryFileManager;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
@@ -31,7 +32,7 @@ public final class Ili2gpkgServiceTest {
     @BeforeEach
     void setUp() {
         fileManager = new InMemoryFileManager();
-        service = new Ili2gpkgService(fileManager);
+        service = new Ili2gpkgService(fileManager, new IlitoolsRunnerMock());
         responseObserver = new RecordingStreamObserver<>();
     }
 
@@ -62,7 +63,7 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        assertEquals(1, fileManager.createdFiles().size());
+        assertEquals(2, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
 
         assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), created.contents());
         assertTrue(created.isClosed(), "File should be closed once the stream completes.");
@@ -86,7 +87,7 @@ public final class Ili2gpkgServiceTest {
 
         assertNull(responseObserver.error());
         assertTrue(responseObserver.isCompleted());
-        assertEquals(2, fileManager.createdFiles().size());
+        assertEquals(3, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
 
         assertArrayEquals("<TRANSFER></TRANSFER>".getBytes(StandardCharsets.UTF_8), xtfFile.contents());
         assertTrue(xtfFile.isClosed(), "File should be closed once the stream completes.");

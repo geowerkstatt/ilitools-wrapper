@@ -3,6 +3,8 @@ package ch.geowerkstatt.ilitoolswrapper;
 import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.FilesystemFileManager;
 import ch.geowerkstatt.ilitoolswrapper.ili2gpkg.Ili2gpkgService;
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsProcessRunner;
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import io.grpc.protobuf.services.ProtoReflectionServiceV1;
 
 import java.io.IOException;
@@ -15,7 +17,8 @@ public final class Main {
      */
     static void main() throws InterruptedException, IOException {
         final FileManager fileManager = new FilesystemFileManager();
-        final Ili2gpkgService ili2gpkgService = new Ili2gpkgService(fileManager);
+        final IlitoolsRunner ilitoolsRunner = new IlitoolsProcessRunner();
+        final Ili2gpkgService ili2gpkgService = new Ili2gpkgService(fileManager, ilitoolsRunner);
 
         final IlitoolsWrapperServer server = new IlitoolsWrapperServer(
                 getPort(),
