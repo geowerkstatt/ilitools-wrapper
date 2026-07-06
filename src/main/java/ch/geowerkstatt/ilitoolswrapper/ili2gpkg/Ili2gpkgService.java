@@ -105,8 +105,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
             try {
                 int fileNumber = files.size() + 1;
-                currentFile = fileManager.createProcessingFile(sessionId.toString(), "file" + fileNumber, extension);
-                files.put(type, currentFile);
+                currentFile = createProcessingFile(type, "file" + fileNumber, extension);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
@@ -177,6 +176,12 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             });
         }
 
+        private ProcessingFile createProcessingFile(Ili2gpkgFileType fileType, String prefix, String extension) {
+            ProcessingFile file = fileManager.createProcessingFile(sessionId.toString(), prefix, extension);
+            files.put(fileType, file);
+            return file;
+        }
+
         private void cancelWithError(Status status) {
             responseObserver.onError(status.asRuntimeException());
             deleteFiles();
@@ -191,10 +196,11 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         }
 
         private CompletableFuture<Void> processData() {
+            ProcessingFile logFile = createProcessingFile(Ili2gpkgFileType.LOG_FILE, "log", "txt");
             LOGGER.fine("Processing data with ili2gpkg.");
             ProcessingArguments arguments = convertRequestToArguments();
             try {
-                return ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, arguments.arguments);
+                return ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, arguments.arguments, logFile);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -207,7 +213,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             switch (info.getOperation()) {
                 case OPERATION_SCHEMA_IMPORT -> {
                     subject = files.get(Ili2gpkgFileType.MODEL_FILE);
-                    dbFile = fileManager.createProcessingFile(sessionId.toString(), "output", "gpkg");
+                    dbFile = createProcessingFile(Ili2gpkgFileType.DB_FILE, "output", "gpkg");
                     args.add("--schemaimport");
                 }
                 case OPERATION_IMPORT -> {
@@ -216,7 +222,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     args.add("--import");
                 }
                 case OPERATION_EXPORT -> {
-                    subject = fileManager.createProcessingFile(sessionId.toString(), "output", "xtf");
+                    subject = createProcessingFile(Ili2gpkgFileType.TRANSFER_FILE, "output", "xtf");
                     dbFile = files.get(Ili2gpkgFileType.DB_FILE);
                     args.add("--export");
                 }

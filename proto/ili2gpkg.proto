@@ -33,6 +33,7 @@ enum Ili2gpkgFileType {
   DB_FILE = 0;
   MODEL_FILE = 1;
   TRANSFER_FILE = 2;
+  LOG_FILE = 3;
 }
 
 message Ili2gpkgFileStart {

@@ -1,5 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper.runner;
 
+import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
+
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -7,7 +9,7 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     private List<String> lastArguments;
 
     @Override
-    public CompletableFuture<Void> run(Tool tool, List<String> args) {
+    public CompletableFuture<Void> run(Tool tool, List<String> args, ProcessingFile logFile) {
         lastArguments = List.copyOf(args);
         return CompletableFuture.completedFuture(null);
     }

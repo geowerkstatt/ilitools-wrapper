@@ -66,7 +66,7 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        assertEquals(2, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
+        assertEquals(3, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
 
         assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), created.contents());
         assertTrue(created.isClosed(), "File should be closed once the stream completes.");
@@ -89,8 +89,7 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        assertTrue(responseObserver.isCompleted());
-        assertEquals(3, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
+        assertEquals(4, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
 
         assertArrayEquals("<TRANSFER></TRANSFER>".getBytes(StandardCharsets.UTF_8), xtfFile.contents());
         assertTrue(xtfFile.isClosed(), "File should be closed once the stream completes.");

@@ -1,5 +1,8 @@
 package ch.geowerkstatt.ilitoolswrapper.runner;
 
+import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
+
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,9 +17,12 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
     private final Map<Tool, String> toolPaths = new HashMap<>();
 
     @Override
-    public CompletableFuture<Void> run(Tool tool, List<String> args) throws IOException {
+    public CompletableFuture<Void> run(Tool tool, List<String> args, ProcessingFile logFile) throws IOException {
         ProcessBuilder processBuilder = new ProcessBuilder();
         processBuilder.command(buildCommand(tool, args));
+        File processLogFile = logFile.filePath().toFile();
+        processBuilder.redirectOutput(processLogFile);
+        processBuilder.redirectError(processLogFile);
 
         Process process = processBuilder.start();
         return process.onExit()
