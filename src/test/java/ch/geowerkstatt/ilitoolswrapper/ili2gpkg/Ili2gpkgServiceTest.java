@@ -1,14 +1,14 @@
 package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
-import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunnerMock;
-import ch.geowerkstatt.ilitoolswrapper.files.InMemoryProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryFileManager;
+import ch.geowerkstatt.ilitoolswrapper.files.InMemoryProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
-import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.StatusUpdate;
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunnerMock;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
@@ -18,18 +18,13 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public final class Ili2gpkgServiceTest {
     private InMemoryFileManager fileManager;
     private IlitoolsRunnerMock ilitoolsRunner;
     private Ili2gpkgService service;
-    private RecordingStreamObserver<StatusUpdate> responseObserver;
+    private RecordingStreamObserver<ConvertResponse> responseObserver;
 
     @BeforeEach
     void setUp() {

@@ -7,7 +7,18 @@ option java_outer_classname = "Ili2gpkgProto";
 package ilitoolswrapper.ili2gpkg;
 
 service Ili2gpkgService {
-  rpc Convert(stream ConvertRequest) returns (stream StatusUpdate) {}
+  rpc Convert(stream ConvertRequest) returns (stream ConvertResponse) {}
+}
+
+enum Ili2gpkgFileType {
+  DB_FILE = 0;
+  MODEL_FILE = 1;
+  TRANSFER_FILE = 2;
+  LOG_FILE = 3;
+}
+
+message Ili2gpkgFileStart {
+  Ili2gpkgFileType type = 1;
 }
 
 enum ConvertOperation {
@@ -29,17 +40,6 @@ message ConvertRequestInfo {
   bool strokeArcs = 10;
 }
 
-enum Ili2gpkgFileType {
-  DB_FILE = 0;
-  MODEL_FILE = 1;
-  TRANSFER_FILE = 2;
-  LOG_FILE = 3;
-}
-
-message Ili2gpkgFileStart {
-  Ili2gpkgFileType type = 1;
-}
-
 message ConvertRequest {
   oneof payload {
     ConvertRequestInfo info = 1;
@@ -49,5 +49,13 @@ message ConvertRequest {
 }
 
 message StatusUpdate {
-  string message = 1;
+  bool success = 1;
+}
+
+message ConvertResponse {
+  oneof payload {
+    StatusUpdate status = 1;
+    Ili2gpkgFileStart fileStart = 2;
+    bytes chunk = 3;
+  }
 }

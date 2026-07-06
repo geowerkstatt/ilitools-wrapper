@@ -1,5 +1,6 @@
 package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
@@ -13,6 +14,8 @@ import com.google.protobuf.ByteString;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -40,18 +43,18 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     }
 
     @Override
-    public StreamObserver<ConvertRequest> convert(StreamObserver<StatusUpdate> responseObserver) {
+    public StreamObserver<ConvertRequest> convert(StreamObserver<ConvertResponse> responseObserver) {
         return new ConvertObserver(responseObserver);
     }
 
     private final class ConvertObserver implements StreamObserver<ConvertRequest> {
-        private final StreamObserver<StatusUpdate> responseObserver;
+        private final StreamObserver<ConvertResponse> responseObserver;
         private final UUID sessionId = UUID.randomUUID();
         private final Map<Ili2gpkgFileType, ProcessingFile> files = new HashMap<>();
         private ProcessingFile currentFile;
         private ConvertRequestInfo info;
 
-        ConvertObserver(StreamObserver<StatusUpdate> responseObserver) {
+        ConvertObserver(StreamObserver<ConvertResponse> responseObserver) {
             this.responseObserver = responseObserver;
         }
 
@@ -127,9 +130,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 return;
             }
 
-            LOGGER.fine("Received chunk of size: " + chunk.size());
-
             try {
+                LOGGER.fine("Received chunk of size: " + chunk.size());
                 chunk.writeTo(currentFile.outputStream());
             } catch (Exception e) {
                 LOGGER.warning("Failed to write chunk to file: " + e);
@@ -155,7 +157,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
             for (ProcessingFile file : files.values()) {
                 try {
-                    file.closeOutputStream();
+                    file.outputStream().close();
                 } catch (Exception e) {
                     LOGGER.warning("Failed to close output file: " + e);
                     cancelWithError(Status.ABORTED.withDescription("Failed to receive file data."));
@@ -163,17 +165,13 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
             }
 
-            processData().thenAcceptAsync(_ -> {
-                deleteFiles();
-                responseObserver.onNext(StatusUpdate.newBuilder().setMessage("Conversion completed.").build());
-                responseObserver.onCompleted();
-            }).exceptionallyAsync(t -> {
-                LOGGER.warning("Processing data with ili2gpkg failed: " + t);
-                deleteFiles();
-                responseObserver.onNext(StatusUpdate.newBuilder().setMessage("Conversion failed.").build());
-                responseObserver.onCompleted();
-                return null;
-            });
+            processData()
+                    .thenAcceptAsync(_ -> returnResponse(true))
+                    .exceptionallyAsync(t -> {
+                        LOGGER.warning("Processing data with ili2gpkg failed: " + t);
+                        returnResponse(false);
+                        return null;
+                    });
         }
 
         private ProcessingFile createProcessingFile(Ili2gpkgFileType fileType, String prefix, String extension) {
@@ -257,6 +255,54 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         private static void addFlag(List<String> args, String flag, boolean enabled) {
             if (enabled) {
                 args.add(flag);
+            }
+        }
+
+        private void returnResponse(boolean success) {
+            try {
+                responseObserver.onNext(createStatusResponse(success));
+                returnFile(responseObserver, Ili2gpkgFileType.LOG_FILE);
+                if (success) {
+                    switch (info.getOperation()) {
+                        case OPERATION_SCHEMA_IMPORT, OPERATION_IMPORT -> returnFile(responseObserver, Ili2gpkgFileType.DB_FILE);
+                        case OPERATION_EXPORT -> returnFile(responseObserver, Ili2gpkgFileType.TRANSFER_FILE);
+                        default -> throw new IllegalArgumentException("Unsupported operation: " + info.getOperation());
+                    }
+                }
+                responseObserver.onCompleted();
+                deleteFiles();
+            } catch (IOException e) {
+                cancelWithError(Status.ABORTED.withDescription("Failed to return file data."));
+            }
+        }
+
+        private static ConvertResponse createStatusResponse(boolean success) {
+            return ConvertResponse.newBuilder()
+                    .setStatus(StatusUpdate.newBuilder()
+                            .setSuccess(success)
+                            .build())
+                    .build();
+        }
+
+        private void returnFile(StreamObserver<ConvertResponse> responseObserver, Ili2gpkgFileType fileType) throws IOException {
+            ProcessingFile file = files.get(fileType);
+            try (InputStream inputStream = file.inputStream()) {
+                responseObserver.onNext(ConvertResponse.newBuilder()
+                        .setFileStart(Ili2gpkgFileStart.newBuilder()
+                                .setType(fileType)
+                                .build())
+                        .build());
+
+                byte[] buffer = new byte[10 * 1024 * 1024];
+                while (true) {
+                    int bytesRead = inputStream.read(buffer);
+                    if (bytesRead <= 0) {
+                        break;
+                    }
+                    responseObserver.onNext(ConvertResponse.newBuilder()
+                            .setChunk(ByteString.copyFrom(buffer, 0, bytesRead))
+                            .build());
+                }
             }
         }
     }

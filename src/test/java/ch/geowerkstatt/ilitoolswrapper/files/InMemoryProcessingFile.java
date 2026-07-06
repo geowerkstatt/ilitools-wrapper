@@ -1,6 +1,8 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
 
@@ -8,7 +10,13 @@ import java.nio.file.Path;
  * In-memory {@link ProcessingFile} that accumulates written chunks in a buffer instead of touching the filesystem.
  */
 public final class InMemoryProcessingFile implements ProcessingFile {
-    private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+    private final ByteArrayOutputStream buffer = new ByteArrayOutputStream() {
+        @Override
+        public void close() throws IOException {
+            super.close();
+            closed = true;
+        }
+    };
     private final Path filePath;
     private boolean closed;
 
@@ -22,16 +30,16 @@ public final class InMemoryProcessingFile implements ProcessingFile {
     }
 
     @Override
+    public InputStream inputStream() {
+        return InputStream.nullInputStream();
+    }
+
+    @Override
     public OutputStream outputStream() {
         if (closed) {
             throw new IllegalStateException("Cannot write to a closed file.");
         }
         return buffer;
-    }
-
-    @Override
-    public void closeOutputStream() {
-        closed = true;
     }
 
     public boolean isClosed() {
