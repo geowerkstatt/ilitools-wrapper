@@ -1,7 +1,9 @@
+ARG ILI2GPKG_VERSION=5.5.2
+
 FROM gradle:9-jdk25 AS build
 WORKDIR /src
 ARG VERSION=0.0.1
-ARG ILI2GPKG_VERSION=5.5.2
+ARG ILI2GPKG_VERSION
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl unzip \
@@ -13,6 +15,7 @@ RUN apt-get update \
 COPY *.gradle.kts gradle.* .
 COPY gradle/ gradle/
 COPY config/ config/
+COPY proto/ proto/
 COPY src/ src/
 
 # Build project
@@ -23,13 +26,15 @@ FROM eclipse-temurin:25-jre AS final
 ENV HOME=/app
 WORKDIR ${HOME}
 
+ARG ILI2GPKG_VERSION
 ENV ILI2GPKG_VERSION=${ILI2GPKG_VERSION} \
     ILI2GPKG_HOME=/opt/ili2gpkg \
-    ILI2GPKG_CACHE_DIR=/var/cache/ili2gpkg
+    ILI_CACHE=/var/cache/ili2gpkg \
+    PROCESSING_DIR=/app/processing
 
 # Cache dir is a named volume target by convention; persisting it across restarts avoids
 # re-downloading INTERLIS models from models.interlis.ch on every worker recycle.
-VOLUME ${ILI2GPKG_CACHE_DIR}
+VOLUME ${ILI_CACHE}
 
 # Set default locale
 ENV LANG=C.UTF-8
@@ -38,6 +43,8 @@ ENV LC_ALL=C.UTF-8
 # Create non-root user
 ENV APP_UID=1234
 RUN groupadd --gid=$APP_UID app && useradd --uid=$APP_UID --gid=$APP_UID --create-home app
+RUN mkdir -p ${ILI_CACHE} ${PROCESSING_DIR} \
+    && chown -R $APP_UID:$APP_UID ${ILI_CACHE} ${PROCESSING_DIR}
 
 USER $APP_UID
 
