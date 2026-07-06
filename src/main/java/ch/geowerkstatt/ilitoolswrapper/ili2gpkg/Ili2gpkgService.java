@@ -1,15 +1,15 @@
 package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
-import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
-import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgServiceGrpc;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.StatusUpdate;
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
@@ -20,12 +20,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceImplBase {
-    private record ProcessingArguments(ProcessingFile outputFile, List<String> arguments) { }
+    private record ProcessingArguments(Ili2gpkgFileType outputFileType, List<String> arguments) { }
 
     private static final Logger LOGGER = Logger.getLogger(Ili2gpkgService.class.getName());
     private final FileManager fileManager;
@@ -134,17 +135,15 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 LOGGER.fine("Received chunk of size: " + chunk.size());
                 chunk.writeTo(currentFile.outputStream());
             } catch (Exception e) {
-                LOGGER.warning("Failed to write chunk to file: " + e);
+                LOGGER.log(Level.WARNING, "Failed to write chunk to file.", e);
                 cancelWithError(Status.ABORTED.withDescription("Failed to receive file data."));
             }
         }
 
         @Override
         public void onError(Throwable t) {
+            LOGGER.log(Level.WARNING, "Error in convert", t);
             deleteFiles();
-            files.clear();
-            LOGGER.warning("Error in convert: " + t);
-            cancelWithError(Status.CANCELLED);
         }
 
         @Override
@@ -159,19 +158,34 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 try {
                     file.outputStream().close();
                 } catch (Exception e) {
-                    LOGGER.warning("Failed to close output file: " + e);
+                    LOGGER.log(Level.WARNING, "Failed to close output file.", e);
                     cancelWithError(Status.ABORTED.withDescription("Failed to receive file data."));
                     return;
                 }
             }
 
-            processData()
-                    .thenAcceptAsync(_ -> returnResponse(true))
-                    .exceptionallyAsync(t -> {
-                        LOGGER.warning("Processing data with ili2gpkg failed: " + t);
-                        returnResponse(false);
-                        return null;
-                    });
+            try {
+                ProcessingFile logFile = createProcessingFile(Ili2gpkgFileType.LOG_FILE, "log", "txt");
+                LOGGER.fine("Processing data with ili2gpkg.");
+                Optional<ProcessingArguments> parsedArguments = convertRequestToArguments();
+                if (parsedArguments.isEmpty()) {
+                    LOGGER.warning("Missing input files for convert request.");
+                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("Missing input files for convert request."));
+                    return;
+                }
+
+                ProcessingArguments processingArguments = parsedArguments.get();
+                ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, processingArguments.arguments(), logFile)
+                        .thenAcceptAsync(_ -> returnResponse(true, processingArguments.outputFileType()))
+                        .exceptionallyAsync(t -> {
+                            LOGGER.warning("Processing data with ili2gpkg failed: " + t);
+                            returnResponse(false, processingArguments.outputFileType());
+                            return null;
+                        });
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Failed to start ili2gpkg process.", e);
+                cancelWithError(Status.ABORTED.withDescription("Failed to start ili2gpkg process."));
+            }
         }
 
         private ProcessingFile createProcessingFile(Ili2gpkgFileType fileType, String prefix, String extension) {
@@ -189,42 +203,40 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             try {
                 fileManager.deleteProcessingFiles(sessionId.toString());
             } catch (Exception e) {
-                LOGGER.warning("Failed to delete processing files: " + e.getMessage());
+                LOGGER.log(Level.WARNING, "Failed to delete processing files.", e);
             }
+            files.clear();
         }
 
-        private CompletableFuture<Void> processData() {
-            ProcessingFile logFile = createProcessingFile(Ili2gpkgFileType.LOG_FILE, "log", "txt");
-            LOGGER.fine("Processing data with ili2gpkg.");
-            ProcessingArguments arguments = convertRequestToArguments();
-            try {
-                return ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, arguments.arguments, logFile);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        private ProcessingArguments convertRequestToArguments() {
+        private Optional<ProcessingArguments> convertRequestToArguments() {
             ProcessingFile subject;
             ProcessingFile dbFile;
+            Ili2gpkgFileType outputFileType;
             List<String> args = new ArrayList<>();
             switch (info.getOperation()) {
                 case OPERATION_SCHEMA_IMPORT -> {
+                    outputFileType = Ili2gpkgFileType.DB_FILE;
                     subject = files.get(Ili2gpkgFileType.MODEL_FILE);
                     dbFile = createProcessingFile(Ili2gpkgFileType.DB_FILE, "output", "gpkg");
                     args.add("--schemaimport");
                 }
                 case OPERATION_IMPORT -> {
+                    outputFileType = Ili2gpkgFileType.DB_FILE;
                     subject = files.get(Ili2gpkgFileType.TRANSFER_FILE);
                     dbFile = files.get(Ili2gpkgFileType.DB_FILE);
                     args.add("--import");
                 }
                 case OPERATION_EXPORT -> {
+                    outputFileType = Ili2gpkgFileType.TRANSFER_FILE;
                     subject = createProcessingFile(Ili2gpkgFileType.TRANSFER_FILE, "output", "xtf");
                     dbFile = files.get(Ili2gpkgFileType.DB_FILE);
                     args.add("--export");
                 }
                 default -> throw new IllegalArgumentException("Unsupported operation: " + info.getOperation());
+            }
+
+            if (subject == null || dbFile == null) {
+                return Optional.empty();
             }
 
             args.add("--dbfile");
@@ -249,7 +261,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             addFlag(args, "--strokeArcs", info.getStrokeArcs());
 
             args.add(subject.filePath().toAbsolutePath().toString());
-            return new ProcessingArguments(dbFile, args);
+            return Optional.of(new ProcessingArguments(outputFileType, args));
         }
 
         private static void addFlag(List<String> args, String flag, boolean enabled) {
@@ -258,20 +270,17 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
         }
 
-        private void returnResponse(boolean success) {
+        private void returnResponse(boolean success, Ili2gpkgFileType outputFileType) {
             try {
                 responseObserver.onNext(createStatusResponse(success));
                 returnFile(responseObserver, Ili2gpkgFileType.LOG_FILE);
                 if (success) {
-                    switch (info.getOperation()) {
-                        case OPERATION_SCHEMA_IMPORT, OPERATION_IMPORT -> returnFile(responseObserver, Ili2gpkgFileType.DB_FILE);
-                        case OPERATION_EXPORT -> returnFile(responseObserver, Ili2gpkgFileType.TRANSFER_FILE);
-                        default -> throw new IllegalArgumentException("Unsupported operation: " + info.getOperation());
-                    }
+                    returnFile(responseObserver, outputFileType);
                 }
                 responseObserver.onCompleted();
                 deleteFiles();
             } catch (IOException e) {
+                LOGGER.log(Level.WARNING, "Failed to return file data.", e);
                 cancelWithError(Status.ABORTED.withDescription("Failed to return file data."));
             }
         }
