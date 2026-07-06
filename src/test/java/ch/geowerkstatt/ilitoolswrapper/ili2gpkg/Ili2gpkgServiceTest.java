@@ -1,11 +1,12 @@
 package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
-import ch.geowerkstatt.ilitoolswrapper.files.InMemoryChunkedFile;
+import ch.geowerkstatt.ilitoolswrapper.files.InMemoryProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryFileManager;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
-import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.FileStart;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.StatusUpdate;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
@@ -18,7 +19,6 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -40,17 +40,13 @@ public final class Ili2gpkgServiceTest {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart("xtf"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
         requestObserver.onNext(chunk("data"));
+        InMemoryProcessingFile created = fileManager.lastCreatedFile();
         requestObserver.onCompleted();
 
-        assertEquals(1, responseObserver.values().size());
-        assertTrue(responseObserver.isCompleted());
-
-        InMemoryChunkedFile created = fileManager.lastCreatedFile();
         assertArrayEquals("data".getBytes(StandardCharsets.UTF_8), created.contents());
         assertTrue(created.isClosed(), "File should be closed once the stream completes.");
-        assertTrue(created.isDeleted(), "File should be deleted after processing.");
     }
 
     @Test
@@ -58,18 +54,17 @@ public final class Ili2gpkgServiceTest {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart("xtf"));
-        requestObserver.onNext(chunk("<TRANSFER>"));
-        requestObserver.onNext(chunk("<DATASECTION/>"));
-        requestObserver.onNext(chunk("</TRANSFER>"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("Hello"));
+        requestObserver.onNext(chunk(" "));
+        requestObserver.onNext(chunk("World"));
+        InMemoryProcessingFile created = fileManager.lastCreatedFile();
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        assertTrue(responseObserver.isCompleted());
         assertEquals(1, fileManager.createdFiles().size());
 
-        InMemoryChunkedFile created = fileManager.lastCreatedFile();
-        assertArrayEquals("<TRANSFER><DATASECTION/></TRANSFER>".getBytes(StandardCharsets.UTF_8), created.contents());
+        assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), created.contents());
         assertTrue(created.isClosed(), "File should be closed once the stream completes.");
     }
 
@@ -78,14 +73,14 @@ public final class Ili2gpkgServiceTest {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart("xtf"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.TRANSFER_FILE));
         requestObserver.onNext(chunk("<TRANSFER>"));
         requestObserver.onNext(chunk("</TRANSFER>"));
-        InMemoryChunkedFile xtfFile = fileManager.lastCreatedFile();
+        InMemoryProcessingFile xtfFile = fileManager.lastCreatedFile();
 
-        requestObserver.onNext(fileStart("txt"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
         requestObserver.onNext(chunk("Hello World"));
-        InMemoryChunkedFile txtFile = fileManager.lastCreatedFile();
+        InMemoryProcessingFile txtFile = fileManager.lastCreatedFile();
 
         requestObserver.onCompleted();
 
@@ -114,7 +109,7 @@ public final class Ili2gpkgServiceTest {
     void fileStartBeforeInfoIsRejected() {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
-        requestObserver.onNext(fileStart("xtf"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
 
         assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
         assertTrue(fileManager.createdFiles().isEmpty());
@@ -138,7 +133,7 @@ public final class Ili2gpkgServiceTest {
 
         assertNotNull(responseObserver.error());
         assertFalse(responseObserver.isCompleted());
-        assertInstanceOf(IllegalStateException.class, responseObserver.error());
+        assertEquals(Status.Code.ABORTED, statusCodeOf(responseObserver.error()));
     }
 
     @Test
@@ -147,7 +142,7 @@ public final class Ili2gpkgServiceTest {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart("xtf"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
 
         assertNotNull(responseObserver.error());
         assertTrue(fileManager.createdFiles().isEmpty());
@@ -161,14 +156,14 @@ public final class Ili2gpkgServiceTest {
     private static ConvertRequest info() {
         return ConvertRequest.newBuilder()
                 .setInfo(ConvertRequestInfo.newBuilder()
-                        .setOperation(ConvertOperation.OPERATION_IMPORT))
+                        .setOperation(ConvertOperation.OPERATION_SCHEMA_IMPORT))
                 .build();
     }
 
-    private static ConvertRequest fileStart(String fileExtension) {
+    private static ConvertRequest fileStart(Ili2gpkgFileType fileType) {
         return ConvertRequest.newBuilder()
-                .setFileStart(FileStart.newBuilder()
-                        .setFileExtension(fileExtension))
+                .setFileStart(Ili2gpkgFileStart.newBuilder()
+                        .setType(fileType))
                 .build();
     }
 

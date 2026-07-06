@@ -4,15 +4,16 @@ import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
-import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.FileStart;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgServiceGrpc;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.StatusUpdate;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -37,7 +38,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     private final class ConvertObserver implements StreamObserver<ConvertRequest> {
         private final StreamObserver<StatusUpdate> responseObserver;
         private final UUID sessionId = UUID.randomUUID();
-        private final List<ProcessingFile> files = new ArrayList<>();
+        private final Map<Ili2gpkgFileType, ProcessingFile> files = new HashMap<>();
+        private ProcessingFile currentFile;
         private ConvertRequestInfo info;
 
         ConvertObserver(StreamObserver<StatusUpdate> responseObserver) {
@@ -52,7 +54,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 case CHUNK -> onChunk(value.getChunk());
                 default -> {
                     LOGGER.warning("Received request with no payload set.");
-                    responseObserver.onError(Status.INVALID_ARGUMENT.withDescription("Invalid message type.").asRuntimeException());
+                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("Invalid message type."));
                 }
             }
         }
@@ -60,7 +62,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         private void onInfo(ConvertRequestInfo info) {
             if (this.info != null) {
                 LOGGER.warning("Duplicate info message received.");
-                responseObserver.onError(Status.INVALID_ARGUMENT.withDescription("Duplicate info message sent.").asRuntimeException());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription("Duplicate info message sent."));
                 return;
             }
 
@@ -68,46 +70,62 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             LOGGER.fine("Received info: " + info);
         }
 
-        private void onFileStart(FileStart fileStart) {
+        private void onFileStart(Ili2gpkgFileStart fileStart) {
             if (info == null) {
                 LOGGER.warning("Received file start before info message.");
-                responseObserver.onError(Status.INVALID_ARGUMENT.withDescription("An info message must be sent before the files.").asRuntimeException());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription("An info message must be sent before the files."));
+                return;
+            }
+            Ili2gpkgFileType type = fileStart.getType();
+            if (files.containsKey(type)) {
+                LOGGER.warning("Received two files with the same type.");
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription("A file of this type is already uploaded."));
+                return;
+            }
+            String extension = switch (type) {
+                case DB_FILE -> "gpkg";
+                case MODEL_FILE -> "ili";
+                case TRANSFER_FILE -> "xtf";
+                default -> null;
+            };
+            if (extension == null) {
+                LOGGER.warning("Received invalid file type.");
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription("File has an invalid type."));
                 return;
             }
 
             try {
                 int fileNumber = files.size() + 1;
-                ProcessingFile file = fileManager.createProcessingFile(sessionId.toString(), "file" + fileNumber, fileStart.getFileExtension());
-                files.add(file);
+                currentFile = fileManager.createProcessingFile(sessionId.toString(), "file" + fileNumber, extension);
+                files.put(type, currentFile);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());
-                responseObserver.onError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()).asRuntimeException());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
             } catch (Exception e) {
-                LOGGER.severe("Failed to open output file: " + e.getMessage());
-                responseObserver.onError(e);
+                LOGGER.severe("Failed to open output file: " + e);
+                cancelWithError(Status.ABORTED.withDescription("Failed to receive file data."));
             }
         }
 
         private void onChunk(ByteString chunk) {
             if (info == null) {
                 LOGGER.warning("Received chunk before info message.");
-                responseObserver.onError(Status.INVALID_ARGUMENT.withDescription("An info message must be sent before the file content.").asRuntimeException());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription("An info message must be sent before the file content."));
                 return;
             }
-            if (files.isEmpty()) {
+            if (currentFile == null) {
                 LOGGER.warning("Received chunk before file start message.");
-                responseObserver.onError(Status.INVALID_ARGUMENT.withDescription("A file start message must be sent before the content.").asRuntimeException());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription("A file start message must be sent before the content."));
                 return;
             }
 
             LOGGER.fine("Received chunk of size: " + chunk.size());
 
             try {
-                ProcessingFile file = files.getLast();
-                chunk.writeTo(file.outputStream());
+                chunk.writeTo(currentFile.outputStream());
             } catch (Exception e) {
-                LOGGER.warning("Failed to write chunk to file: " + e.getMessage());
-                responseObserver.onError(e);
+                LOGGER.warning("Failed to write chunk to file: " + e);
+                cancelWithError(Status.ABORTED.withDescription("Failed to receive file data."));
             }
         }
 
@@ -115,24 +133,24 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         public void onError(Throwable t) {
             deleteFiles();
             files.clear();
-            LOGGER.warning("Error in convert: " + t.getMessage());
-            responseObserver.onError(t);
+            LOGGER.warning("Error in convert: " + t);
+            cancelWithError(Status.CANCELLED);
         }
 
         @Override
         public void onCompleted() {
             if (files.isEmpty()) {
                 LOGGER.warning("No files were transferred, aborting conversion.");
-                responseObserver.onError(new IllegalStateException("No files were transferred, aborting conversion."));
+                cancelWithError(Status.ABORTED.withDescription("No files were transferred, aborting conversion."));
                 return;
             }
 
-            for (ProcessingFile file : files) {
+            for (ProcessingFile file : files.values()) {
                 try {
                     file.closeOutputStream();
                 } catch (Exception e) {
-                    LOGGER.warning("Failed to close output file: " + e.getMessage());
-                    responseObserver.onError(e);
+                    LOGGER.warning("Failed to close output file: " + e);
+                    cancelWithError(Status.ABORTED.withDescription("Failed to receive file data."));
                     return;
                 }
             }
@@ -143,13 +161,16 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             responseObserver.onCompleted();
         }
 
+        private void cancelWithError(Status status) {
+            responseObserver.onError(status.asRuntimeException());
+            deleteFiles();
+        }
+
         private void deleteFiles() {
-            for (ProcessingFile file : files) {
-                try {
-                    file.delete();
-                } catch (Exception e) {
-                    LOGGER.warning("Failed to delete output file: " + e.getMessage());
-                }
+            try {
+                fileManager.deleteProcessingFiles(sessionId.toString());
+            } catch (Exception e) {
+                LOGGER.warning("Failed to delete processing files: " + e.getMessage());
             }
         }
 

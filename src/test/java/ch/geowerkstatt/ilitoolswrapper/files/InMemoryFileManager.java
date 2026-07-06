@@ -26,6 +26,10 @@ public final class InMemoryFileManager implements FileManager {
         return file;
     }
 
+    @Override
+    public void deleteProcessingFiles(String folderName) {
+    }
+
     public List<InMemoryProcessingFile> createdFiles() {
         return createdFiles;
     }

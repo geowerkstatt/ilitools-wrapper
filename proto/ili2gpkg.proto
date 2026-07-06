@@ -16,18 +16,24 @@ enum ConvertOperation {
   OPERATION_EXPORT = 2;
 }
 
-message FileStart {
-  string fileExtension = 1;
-}
-
 message ConvertRequestInfo {
   ConvertOperation operation = 1;
+}
+
+enum Ili2gpkgFileType {
+  DB_FILE = 0;
+  MODEL_FILE = 1;
+  TRANSFER_FILE = 2;
+}
+
+message Ili2gpkgFileStart {
+  Ili2gpkgFileType type = 1;
 }
 
 message ConvertRequest {
   oneof payload {
     ConvertRequestInfo info = 1;
-    FileStart fileStart = 2;
+    Ili2gpkgFileStart fileStart = 2;
     bytes chunk = 3;
   }
 }

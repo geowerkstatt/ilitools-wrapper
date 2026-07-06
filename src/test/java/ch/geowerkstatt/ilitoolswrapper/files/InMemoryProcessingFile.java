@@ -11,7 +11,6 @@ public final class InMemoryProcessingFile implements ProcessingFile {
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     private final Path filePath;
     private boolean closed;
-    private boolean deleted;
 
     public InMemoryProcessingFile(Path filePath) {
         this.filePath = filePath;
@@ -33,15 +32,6 @@ public final class InMemoryProcessingFile implements ProcessingFile {
     @Override
     public void closeOutputStream() {
         closed = true;
-    }
-
-    @Override
-    public void delete() {
-        deleted = true;
-    }
-
-    public boolean isDeleted() {
-        return deleted;
     }
 
     public boolean isClosed() {

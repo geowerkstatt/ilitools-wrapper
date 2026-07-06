@@ -30,9 +30,4 @@ public interface ProcessingFile {
      * @throws IOException if an error occurred while closing the stream
      */
     void closeOutputStream() throws IOException;
-
-    /**
-     * Deletes the file. Should be called if the file is no longer needed.
-     */
-    void delete() throws IOException;
 }

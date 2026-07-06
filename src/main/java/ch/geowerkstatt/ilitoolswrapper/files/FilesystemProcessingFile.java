@@ -41,10 +41,4 @@ public final class FilesystemProcessingFile implements ProcessingFile {
             outputStream = null;
         }
     }
-
-    @Override
-    public void delete() throws IOException {
-        closeOutputStream();
-        Files.delete(filePath);
-    }
 }
