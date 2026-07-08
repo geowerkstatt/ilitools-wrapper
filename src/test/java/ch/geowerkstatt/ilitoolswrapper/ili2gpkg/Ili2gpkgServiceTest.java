@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -35,7 +36,7 @@ public final class Ili2gpkgServiceTest {
     }
 
     @Test
-    void convertReportsCompletionStatus() {
+    void convertAcceptsRequestData() {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
         requestObserver.onNext(info());
@@ -46,6 +47,8 @@ public final class Ili2gpkgServiceTest {
 
         assertArrayEquals("data".getBytes(StandardCharsets.UTF_8), created.contents());
         assertTrue(created.isClosed(), "File should be closed once the stream completes.");
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -65,6 +68,8 @@ public final class Ili2gpkgServiceTest {
 
         assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), created.contents());
         assertTrue(created.isClosed(), "File should be closed once the stream completes.");
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -91,6 +96,8 @@ public final class Ili2gpkgServiceTest {
 
         assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), txtFile.contents());
         assertTrue(txtFile.isClosed(), "File should be closed once the stream completes.");
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -127,6 +134,8 @@ public final class Ili2gpkgServiceTest {
         assertTrue(args.contains("--skipGeometryErrors"));
         assertTrue(args.contains("--importTid"));
         assertTrue(args.contains("--strokeArcs"));
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -150,6 +159,8 @@ public final class Ili2gpkgServiceTest {
         assertFalse(args.contains("--skipGeometryErrors"));
         assertFalse(args.contains("--importTid"));
         assertFalse(args.contains("--strokeArcs"));
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -205,11 +216,42 @@ public final class Ili2gpkgServiceTest {
         assertTrue(fileManager.createdFiles().isEmpty());
     }
 
+    @Test
+    void reportsRunFailure() {
+        ilitoolsRunner.failRunWith(new RuntimeException("process failed"));
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        assertHasResponses(false, Ili2gpkgFileType.LOG_FILE);
+    }
+
     private static void assertArgumentWithValue(List<String> args, String name, String value) {
         int index = args.indexOf(name);
         assertTrue(index >= 0, "Expected argument " + name + " to be present.");
         assertTrue(index + 1 < args.size(), "Expected a value after " + name + ".");
         assertEquals(value, args.get(index + 1), "Unexpected value for " + name + ".");
+    }
+
+    void assertHasResponses(boolean success, Ili2gpkgFileType... expectedFiles) {
+        assertDoesNotThrow(() -> responseObserver.completion().get(10, TimeUnit.SECONDS));
+
+        List<ConvertResponse> responses = responseObserver.values();
+        int expectedResponseCount = expectedFiles.length + 1; // include status response
+        assertEquals(expectedResponseCount, responses.size(), "Unexpected number of responses.");
+        assertEquals(ConvertResponse.PayloadCase.STATUS, responses.getFirst().getPayloadCase(), "First response should be status.");
+        assertEquals(success, responses.getFirst().getStatus().getSuccess(), "Unexpected success status in response.");
+
+        for (int i = 0; i < expectedFiles.length; i++) {
+            ConvertResponse response = responses.get(i + 1);
+            assertEquals(ConvertResponse.PayloadCase.FILESTART, response.getPayloadCase(), "Expected file start response at index " + (i + 1));
+            assertEquals(expectedFiles[i], response.getFileStart().getType(), "Unexpected file type at index " + (i + 1));
+            // the mocks do not provide any file content (chunks)
+        }
     }
 
     private static Status.Code statusCodeOf(Throwable error) {

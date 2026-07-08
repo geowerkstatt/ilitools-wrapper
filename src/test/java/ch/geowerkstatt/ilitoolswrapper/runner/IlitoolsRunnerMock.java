@@ -7,11 +7,12 @@ import java.util.concurrent.CompletableFuture;
 
 public final class IlitoolsRunnerMock implements IlitoolsRunner {
     private List<String> lastArguments;
+    private Exception exception;
 
     @Override
     public CompletableFuture<Void> run(Tool tool, List<String> args, ProcessingFile logFile) {
         lastArguments = List.copyOf(args);
-        return CompletableFuture.completedFuture(null);
+        return exception == null ? CompletableFuture.completedFuture(null) : CompletableFuture.failedFuture(exception);
     }
 
     /**
@@ -21,5 +22,14 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
      */
     public List<String> lastArguments() {
         return lastArguments;
+    }
+
+    /**
+     * Configures the mock to fail the next {@link #run} invocation with the given exception.
+     *
+     * @param exception the exception to return on the next run
+     */
+    public void failRunWith(Exception exception) {
+        this.exception = exception;
     }
 }
