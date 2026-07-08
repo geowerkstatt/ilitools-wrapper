@@ -10,13 +10,7 @@ import java.nio.file.Path;
  * In-memory {@link ProcessingFile} that accumulates written chunks in a buffer instead of touching the filesystem.
  */
 public final class InMemoryProcessingFile implements ProcessingFile {
-    private final ByteArrayOutputStream buffer = new ByteArrayOutputStream() {
-        @Override
-        public void close() throws IOException {
-            super.close();
-            closed = true;
-        }
-    };
+    private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     private final Path filePath;
     private boolean closed;
 
@@ -31,6 +25,9 @@ public final class InMemoryProcessingFile implements ProcessingFile {
 
     @Override
     public InputStream inputStream() {
+        if (closed) {
+            throw new IllegalStateException("Cannot read from a closed file.");
+        }
         return InputStream.nullInputStream();
     }
 
@@ -48,5 +45,11 @@ public final class InMemoryProcessingFile implements ProcessingFile {
 
     public byte[] contents() {
         return buffer.toByteArray();
+    }
+
+    @Override
+    public void close() throws IOException {
+        buffer.close();
+        closed = true;
     }
 }

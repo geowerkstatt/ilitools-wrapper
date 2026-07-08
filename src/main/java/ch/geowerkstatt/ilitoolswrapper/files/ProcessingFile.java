@@ -1,5 +1,6 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -8,7 +9,7 @@ import java.nio.file.Path;
 /**
  * A temporary file used for processing.
  */
-public interface ProcessingFile {
+public interface ProcessingFile extends Closeable {
     /**
      * Returns the path of the underlying file.
      *

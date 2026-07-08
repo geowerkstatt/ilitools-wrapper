@@ -154,14 +154,10 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 return;
             }
 
-            for (ProcessingFile file : files.values()) {
-                try {
-                    file.outputStream().close();
-                } catch (Exception e) {
-                    LOGGER.log(Level.WARNING, "Failed to close output file.", e);
-                    cancelWithError(Status.ABORTED.withDescription("Failed to receive file data."));
-                    return;
-                }
+            if (!closeFiles()) {
+                LOGGER.warning("Failed to close output files, aborting conversion.");
+                cancelWithError(Status.ABORTED.withDescription("Failed to receive file data."));
+                return;
             }
 
             try {
@@ -200,12 +196,26 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         }
 
         private void deleteFiles() {
+            closeFiles();
             try {
                 fileManager.deleteProcessingFiles(sessionId.toString());
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Failed to delete processing files.", e);
             }
             files.clear();
+        }
+
+        private boolean closeFiles() {
+            boolean success = true;
+            for (ProcessingFile file : files.values()) {
+                try {
+                    file.close();
+                } catch (Exception e) {
+                    LOGGER.log(Level.WARNING, "Failed to close processing file.", e);
+                    success = false;
+                }
+            }
+            return success;
         }
 
         private Optional<ProcessingArguments> convertRequestToArguments() {

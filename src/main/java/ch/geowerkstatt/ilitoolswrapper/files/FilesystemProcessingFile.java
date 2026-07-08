@@ -43,4 +43,14 @@ public final class FilesystemProcessingFile implements ProcessingFile {
         }
         return outputStream;
     }
+
+    @Override
+    public void close() throws IOException {
+        if (inputStream != null) {
+            inputStream.close();
+        }
+        if (outputStream != null) {
+            outputStream.close();
+        }
+    }
 }
