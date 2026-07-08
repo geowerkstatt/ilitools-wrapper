@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceImplBase {
     private record ProcessingArguments(Ili2gpkgFileType outputFileType, List<String> arguments) { }
@@ -33,7 +34,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     private final IlitoolsRunner ilitoolsRunner;
 
     /**
-     * Creates a new {@link Ili2gpkgService} with the specified file manager.
+     * Creates a new {@link Ili2gpkgService} with the specified file manager and tool runner.
      *
      * @param fileManager the FileManager to use for managing temporary files
      * @param ilitoolsRunner the IlitoolsRunner to use for running the ili2gpkg tool
@@ -51,7 +52,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     private final class ConvertObserver implements StreamObserver<ConvertRequest> {
         private final StreamObserver<ConvertResponse> responseObserver;
         private final UUID sessionId = UUID.randomUUID();
-        private final Map<Ili2gpkgFileType, ProcessingFile> files = new HashMap<>();
+        private final Map<Ili2gpkgFileType, List<ProcessingFile>> files = new HashMap<>();
         private ProcessingFile currentFile;
         private ConvertRequestInfo info;
 
@@ -90,11 +91,6 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 return;
             }
             Ili2gpkgFileType type = fileStart.getType();
-            if (files.containsKey(type)) {
-                LOGGER.warning("Received two files with the same type.");
-                cancelWithError(Status.INVALID_ARGUMENT.withDescription("A file of this type is already uploaded."));
-                return;
-            }
             String extension = switch (type) {
                 case DB_FILE -> "gpkg";
                 case MODEL_FILE -> "ili";
@@ -165,8 +161,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 LOGGER.fine("Processing data with ili2gpkg.");
                 Optional<ProcessingArguments> parsedArguments = convertRequestToArguments();
                 if (parsedArguments.isEmpty()) {
-                    LOGGER.warning("Missing input files for convert request.");
-                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("Missing input files for convert request."));
+                    LOGGER.warning("Invalid input files for convert request.");
+                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("Invalid input files for convert request."));
                     return;
                 }
 
@@ -186,7 +182,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
         private ProcessingFile createProcessingFile(Ili2gpkgFileType fileType, String prefix, String extension) {
             ProcessingFile file = fileManager.createProcessingFile(sessionId.toString(), prefix, extension);
-            files.put(fileType, file);
+            files.computeIfAbsent(fileType, _ -> new ArrayList<>()).add(file);
             return file;
         }
 
@@ -207,45 +203,47 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
         private boolean closeFiles() {
             boolean success = true;
-            for (ProcessingFile file : files.values()) {
-                try {
-                    file.close();
-                } catch (Exception e) {
-                    LOGGER.log(Level.WARNING, "Failed to close processing file.", e);
-                    success = false;
+            for (List<ProcessingFile> files : files.values()) {
+                for (ProcessingFile file : files) {
+                    try {
+                        file.close();
+                    } catch (Exception e) {
+                        LOGGER.log(Level.WARNING, "Failed to close processing file.", e);
+                        success = false;
+                    }
                 }
             }
             return success;
         }
 
         private Optional<ProcessingArguments> convertRequestToArguments() {
-            ProcessingFile subject;
+            List<ProcessingFile> subjects;
             ProcessingFile dbFile;
             Ili2gpkgFileType outputFileType;
             List<String> args = new ArrayList<>();
             switch (info.getOperation()) {
                 case OPERATION_SCHEMA_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
-                    subject = files.get(Ili2gpkgFileType.MODEL_FILE);
+                    subjects = getSingleFile(Ili2gpkgFileType.MODEL_FILE).map(List::of).orElse(null);
                     dbFile = createProcessingFile(Ili2gpkgFileType.DB_FILE, "output", "gpkg");
                     args.add("--schemaimport");
                 }
                 case OPERATION_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
-                    subject = files.get(Ili2gpkgFileType.TRANSFER_FILE);
-                    dbFile = files.get(Ili2gpkgFileType.DB_FILE);
+                    subjects = files.get(Ili2gpkgFileType.TRANSFER_FILE);
+                    dbFile = getSingleFile(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--import");
                 }
                 case OPERATION_EXPORT -> {
                     outputFileType = Ili2gpkgFileType.TRANSFER_FILE;
-                    subject = createProcessingFile(Ili2gpkgFileType.TRANSFER_FILE, "output", "xtf");
-                    dbFile = files.get(Ili2gpkgFileType.DB_FILE);
+                    subjects = List.of(createProcessingFile(Ili2gpkgFileType.TRANSFER_FILE, "output", "xtf"));
+                    dbFile = getSingleFile(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--export");
                 }
                 default -> throw new IllegalArgumentException("Unsupported operation: " + info.getOperation());
             }
 
-            if (subject == null || dbFile == null) {
+            if (subjects == null || dbFile == null) {
                 return Optional.empty();
             }
 
@@ -270,8 +268,19 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             addFlag(args, "--importTid", info.getImportTid());
             addFlag(args, "--strokeArcs", info.getStrokeArcs());
 
-            args.add(subject.filePath().toAbsolutePath().toString());
+            String subject = subjects.stream()
+                    .map(file -> file.filePath().toAbsolutePath().toString())
+                    .collect(Collectors.joining(";"));
+            args.add(subject);
             return Optional.of(new ProcessingArguments(outputFileType, args));
+        }
+
+        private Optional<ProcessingFile> getSingleFile(Ili2gpkgFileType fileType) {
+            List<ProcessingFile> filesOfType = files.get(fileType);
+            if (filesOfType == null || filesOfType.size() != 1) {
+                return Optional.empty();
+            }
+            return Optional.of(filesOfType.getFirst());
         }
 
         private static void addFlag(List<String> args, String flag, boolean enabled) {
@@ -304,7 +313,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         }
 
         private void returnFile(StreamObserver<ConvertResponse> responseObserver, Ili2gpkgFileType fileType) throws IOException {
-            ProcessingFile file = files.get(fileType);
+            ProcessingFile file = getSingleFile(fileType)
+                    .orElseThrow(() -> new IllegalStateException("Expected a single file of type " + fileType + " to return."));
             try (InputStream inputStream = file.inputStream()) {
                 responseObserver.onNext(ConvertResponse.newBuilder()
                         .setFileStart(Ili2gpkgFileStart.newBuilder()

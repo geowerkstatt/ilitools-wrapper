@@ -46,7 +46,7 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertArrayEquals("data".getBytes(StandardCharsets.UTF_8), created.contents());
-        assertTrue(created.isClosed(), "File should be closed once the stream completes.");
+        assertTrue(created.isClosed(), "File should be closed once the request completes.");
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
@@ -67,7 +67,7 @@ public final class Ili2gpkgServiceTest {
         assertEquals(3, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
 
         assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), created.contents());
-        assertTrue(created.isClosed(), "File should be closed once the stream completes.");
+        assertTrue(created.isClosed(), "File should be closed once the request completes.");
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
@@ -80,7 +80,11 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onNext(fileStart(Ili2gpkgFileType.TRANSFER_FILE));
         requestObserver.onNext(chunk("<TRANSFER>"));
         requestObserver.onNext(chunk("</TRANSFER>"));
-        InMemoryProcessingFile xtfFile = fileManager.lastCreatedFile();
+        InMemoryProcessingFile xtfFile1 = fileManager.lastCreatedFile();
+
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.TRANSFER_FILE));
+        requestObserver.onNext(chunk("<TRANSFER/>"));
+        InMemoryProcessingFile xtfFile2 = fileManager.lastCreatedFile();
 
         requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
         requestObserver.onNext(chunk("Hello World"));
@@ -89,13 +93,16 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        assertEquals(4, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
+        assertEquals(5, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
 
-        assertArrayEquals("<TRANSFER></TRANSFER>".getBytes(StandardCharsets.UTF_8), xtfFile.contents());
-        assertTrue(xtfFile.isClosed(), "File should be closed once the stream completes.");
+        assertArrayEquals("<TRANSFER></TRANSFER>".getBytes(StandardCharsets.UTF_8), xtfFile1.contents());
+        assertTrue(xtfFile1.isClosed(), "File should be closed once the request completes.");
+
+        assertArrayEquals("<TRANSFER/>".getBytes(StandardCharsets.UTF_8), xtfFile2.contents());
+        assertTrue(xtfFile2.isClosed(), "File should be closed once the request completes.");
 
         assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), txtFile.contents());
-        assertTrue(txtFile.isClosed(), "File should be closed once the stream completes.");
+        assertTrue(txtFile.isClosed(), "File should be closed once the request completes.");
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
