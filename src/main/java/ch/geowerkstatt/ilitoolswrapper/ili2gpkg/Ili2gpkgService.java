@@ -2,6 +2,7 @@ package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
 import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
+import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheck;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
@@ -12,6 +13,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.StatusUpdate;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
+import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
@@ -22,11 +24,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceImplBase {
+public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceImplBase implements ServiceHealthCheck {
     private record ProcessingArguments(Ili2gpkgFileType outputFileType, List<String> arguments) { }
 
     private static final Logger LOGGER = Logger.getLogger(Ili2gpkgService.class.getName());
@@ -42,6 +45,22 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     public Ili2gpkgService(FileManager fileManager, IlitoolsRunner ilitoolsRunner) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
+    }
+
+    @Override
+    public String getServiceName() {
+        return "Ili2gpkgService";
+    }
+
+    @Override
+    public HealthCheckResponse.ServingStatus getHealthStatus() {
+        try {
+            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, List.of("--version"), null).get(5, TimeUnit.SECONDS);
+            return HealthCheckResponse.ServingStatus.SERVING;
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Health check failed: ili2gpkg is not available.", e);
+            return HealthCheckResponse.ServingStatus.NOT_SERVING;
+        }
     }
 
     @Override

@@ -2,6 +2,7 @@ package ch.geowerkstatt.ilitoolswrapper.runner;
 
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 
+import javax.annotation.Nullable;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -10,7 +11,7 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     private Exception exception;
 
     @Override
-    public CompletableFuture<Void> run(Tool tool, List<String> args, ProcessingFile logFile) {
+    public CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable ProcessingFile logFile) {
         lastArguments = List.copyOf(args);
         return exception == null ? CompletableFuture.completedFuture(null) : CompletableFuture.failedFuture(exception);
     }

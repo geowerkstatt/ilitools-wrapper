@@ -11,6 +11,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunnerMock;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
+import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -235,6 +236,17 @@ public final class Ili2gpkgServiceTest {
 
         assertNull(responseObserver.error());
         assertHasResponses(false, Ili2gpkgFileType.LOG_FILE);
+    }
+
+    @Test
+    void returnsHealthyOnSuccess() {
+        assertEquals(HealthCheckResponse.ServingStatus.SERVING, service.getHealthStatus());
+    }
+
+    @Test
+    void returnsUnhealthyOnError() {
+        ilitoolsRunner.failRunWith(new RuntimeException("process failed"));
+        assertEquals(HealthCheckResponse.ServingStatus.NOT_SERVING, service.getHealthStatus());
     }
 
     private static void assertArgumentWithValue(List<String> args, String name, String value) {

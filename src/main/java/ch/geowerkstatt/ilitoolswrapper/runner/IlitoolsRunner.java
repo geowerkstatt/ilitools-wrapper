@@ -2,6 +2,7 @@ package ch.geowerkstatt.ilitoolswrapper.runner;
 
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -24,9 +25,9 @@ public interface IlitoolsRunner {
      *
      * @param tool the tool to invoke
      * @param args the command-line arguments passed to the tool, in order
-     * @param logFile a {@link ProcessingFile} to which the tool's standard output and error streams are redirected
+     * @param logFile an optional {@link ProcessingFile} to which the tool's standard output and error streams are redirected
      * @return a CompletableFuture that completes or fails when the process exits
      * @throws IOException if the tool cannot be located or started
      */
-    CompletableFuture<Void> run(Tool tool, List<String> args, ProcessingFile logFile) throws IOException;
+    CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable ProcessingFile logFile) throws IOException;
 }
