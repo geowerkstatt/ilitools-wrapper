@@ -3,6 +3,7 @@ syntax = "proto3";
 option java_multiple_files = true;
 option java_package = "ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg";
 option java_outer_classname = "Ili2gpkgProto";
+option csharp_namespace = "Geowerkstatt.IlitoolsWrapperApi";
 
 package ilitoolswrapper.ili2gpkg;
 
