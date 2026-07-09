@@ -29,7 +29,7 @@ WORKDIR ${HOME}
 ARG ILI2GPKG_VERSION
 ENV ILI2GPKG_VERSION=${ILI2GPKG_VERSION} \
     ILI2GPKG_HOME=/opt/ili2gpkg \
-    ILI_CACHE=/var/cache/ili2gpkg \
+    ILI_CACHE=/var/cache/ilicache \
     PROCESSING_DIR=/app/processing
 
 # Cache dir is a named volume target by convention; persisting it across restarts avoids
