@@ -22,7 +22,8 @@ public final class IlitoolsWrapperServer {
      * Creates a new server to listen on the specified port with the given services.
      */
     public IlitoolsWrapperServer(int port, BindableService... services) {
-        ServerBuilder<?> builder = Grpc.newServerBuilderForPort(port, InsecureServerCredentials.create());
+        ServerBuilder<?> builder = Grpc.newServerBuilderForPort(port, InsecureServerCredentials.create())
+                .maxInboundMessageSize(100 * 1024 * 1024); // max 100 MB per message
 
         for (BindableService service : services) {
             builder.addService(service);

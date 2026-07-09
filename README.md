@@ -8,9 +8,56 @@ Der ilitools-wrapper stellt verschiedene INTERLIS Tools als gRPC-Server zur Verf
 
 Java 25 (LTS) oder neuer wird benötigt, um den `ilitools-wrapper` auszuführen.
 
+Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Docker Images wird automatisch eine Version von ili2gpkg heruntergeladen und konfiguriert.
+
 ## Konfiguration
 
-Der Port des gRPC-Servers kann über die Umgebungsvariable `GRPC_PORT` konfiguriert werden, der Standardwert ist `5555`.
+| Umgebungsvariable | Default-Wert | Beschreibung |
+| --- | --- | --- |
+| `GRPC_PORT` | `5555` | Port des gRPC-Servers |
+| `PROCESSING_DIR` | `processing` | Basis-Verzeichnis für temporäre Dateien während der Prozessierung |
+| `ILI2GPKG_HOME` | Aus Dockerfile oder Gradle `run` Task | Verzeichnis der ili2gpkg Installation |
+| `ILI2GPKG_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ili2gpkg Tools |
+
+## Ili2gpkg service
+
+Der `Ili2gpkgService` kapselt das Kommandozeilen-Tool `ili2gpkg`, das INTERLIS-Transferdateien und GeoPackage-Datenbanken ineinander umwandelt.
+Der Service stellt eine einzige RPC-Methode bereit:
+
+```proto
+rpc Convert(stream ConvertRequest) returns (stream ConvertResponse)
+```
+
+### Ablauf einer Anfrage
+
+Die `ConvertRequest`-Nachrichten müssen in folgender Reihenfolge gesendet werden:
+
+1. Genau eine `ConvertRequestInfo` zuerst. Sie definiert die auszuführende Operation und ihre Optionen.
+2. Pro Eingabedatei:
+    1. Ein `Ili2gpkgFileStart`, welcher den Dateityp definiert.
+    2. Direkt anschliessend der jeweilige Dateiinhalt in einer oder mehreren `chunk`-Nachrichten.
+
+Die maximale Grösse einer eingehenden Nachricht beträgt 100 MB.
+Falls eine Datei grösser ist, muss sie auf mehrere Chunks aufgeteilt werden.
+
+### Operationen und benötigte Dateien
+
+Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet und welche Ausgabedatei erzeugt wird:
+
+| Operation | Beschreibung | Benötigte Eingabedateien | Ausgabedatei |
+| --- | --- | --- | --- |
+| `OPERATION_SCHEMA_IMPORT` | Erzeugt das GeoPackage-Schema aus einem INTERLIS-Modell | `MODEL_FILE` (`.ili`) | `DB_FILE` (`.gpkg`) |
+| `OPERATION_IMPORT` | Importiert eine Transferdatei in ein bestehendes GeoPackage | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
+| `OPERATION_EXPORT` | Exportiert ein GeoPackage in eine Transferdatei | `DB_FILE` (`.gpkg`) | `TRANSFER_FILE` (`.xtf`) |
+
+### Ablauf der Antwort
+
+Nachdem der Anfrage-Stream abgeschlossen ist, werden die Daten verarbeitet.
+Nach der Verarbeitung antwortet der Server mit `ConvertResponse`-Nachrichten in folgender Reihenfolge:
+
+1. Ein `StatusUpdate`, das angibt, ob die Verarbeitung erfolgreich war.
+2. Die Log-Datei des ili2gpkg-Prozesses, aufgeteilt in `fileStart` und einen oder mehrere `chunk`s.
+3. Bei Erfolg wird zusätzlich die Ausgabedatei der Operation gesendet, ebenfalls aufgeteilt in `fileStart` und `chunk`s.
 
 ## Testen mit grpcurl
 

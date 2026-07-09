@@ -1,5 +1,7 @@
 .gradle
 build/
+ilitools/
+processing/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/

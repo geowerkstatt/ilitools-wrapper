@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg";
+option java_outer_classname = "Ili2gpkgProto";
+
+package ilitoolswrapper.ili2gpkg;
+
+service Ili2gpkgService {
+  rpc Convert(stream ConvertRequest) returns (stream ConvertResponse) {}
+}
+
+enum Ili2gpkgFileType {
+  DB_FILE = 0;
+  MODEL_FILE = 1;
+  TRANSFER_FILE = 2;
+  LOG_FILE = 3;
+}
+
+message Ili2gpkgFileStart {
+  Ili2gpkgFileType type = 1;
+}
+
+enum ConvertOperation {
+  OPERATION_SCHEMA_IMPORT = 0;
+  OPERATION_IMPORT = 1;
+  OPERATION_EXPORT = 2;
+}
+
+message ConvertRequestInfo {
+  ConvertOperation operation = 1;
+  repeated string models = 2;
+  int32 defaultSrsCode = 3;
+  bool disableValidation = 4;
+  bool createBasketCol = 5;
+  bool sqlEnableNull = 6;
+  bool skipReferenceErrors = 7;
+  bool skipGeometryErrors = 8;
+  bool importTid = 9;
+  bool strokeArcs = 10;
+}
+
+message ConvertRequest {
+  oneof payload {
+    ConvertRequestInfo info = 1;
+    Ili2gpkgFileStart fileStart = 2;
+    bytes chunk = 3;
+  }
+}
+
+message StatusUpdate {
+  bool success = 1;
+}
+
+message ConvertResponse {
+  oneof payload {
+    StatusUpdate status = 1;
+    Ili2gpkgFileStart fileStart = 2;
+    bytes chunk = 3;
+  }
+}
