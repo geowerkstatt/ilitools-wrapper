@@ -1,0 +1,53 @@
+name: Publish NuGet package
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to check out before packing the NuGet package."
+        required: true
+        type: string
+      version-suffix:
+        description: "Suffix appended to the version read from the version file (e.g. .3-preview, combined with a version of 1.2 would create 1.2.3-preview), ignored if a version-tag is provided."
+        required: false
+        type: string
+      version-tag:
+        description: "Version tag to use for the NuGet package (e.g. v1.2.3)."
+        required: false
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    name: Publish NuGet package
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set environment variables
+        run: |
+          if [ -n "${{ inputs.version-tag }}" ]; then
+            version_tag=${{ inputs.version-tag }}
+            version=${version_tag#v}
+          else
+            version="$(cat VERSION)${{ inputs.version-suffix }}"
+          fi
+          echo VERSION=$version >> $GITHUB_ENV
+
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0"
+
+      - name: Pack NuGet package
+        run: dotnet pack stub/Geowerkstatt.IlitoosWrapperApi/Geowerkstatt.IlitoosWrapperApi.csproj -c Release -p:Version=${{ env.VERSION }} -o nuget-artifacts
+
+      - name: Push NuGet package to GitHub Packages
+        run: dotnet nuget push "nuget-artifacts/*.nupkg" --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
