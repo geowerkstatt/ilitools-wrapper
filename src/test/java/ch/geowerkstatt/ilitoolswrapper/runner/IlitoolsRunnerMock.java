@@ -7,12 +7,14 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public final class IlitoolsRunnerMock implements IlitoolsRunner {
-    private List<String> lastArguments;
+    public record Arguments(Tool tool, List<String> args, @Nullable ProcessingFile logFile, @Nullable Timeout timeout) { }
+
+    private Arguments lastArguments;
     private Exception exception;
 
     @Override
     public CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable ProcessingFile logFile, @Nullable Timeout timeout) {
-        lastArguments = List.copyOf(args);
+        lastArguments = new Arguments(tool, List.copyOf(args), logFile, timeout);
         return exception == null ? CompletableFuture.completedFuture(null) : CompletableFuture.failedFuture(exception);
     }
 
@@ -21,7 +23,7 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
      *
      * @return the arguments of the last run, or {@code null} if the runner was never invoked
      */
-    public List<String> lastArguments() {
+    public Arguments lastArguments() {
         return lastArguments;
     }
 

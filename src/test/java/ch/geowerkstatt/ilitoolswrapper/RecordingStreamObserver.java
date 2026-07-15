@@ -1,4 +1,4 @@
-package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
+package ch.geowerkstatt.ilitoolswrapper;
 
 import io.grpc.stub.StreamObserver;
 
@@ -32,15 +32,15 @@ public final class RecordingStreamObserver<T> implements StreamObserver<T> {
         completion.complete(null);
     }
 
-    List<T> values() {
+    public List<T> values() {
         return values;
     }
 
-    Throwable error() {
+    public Throwable error() {
         return error;
     }
 
-    boolean isCompleted() {
+    public boolean isCompleted() {
         return completed;
     }
 
