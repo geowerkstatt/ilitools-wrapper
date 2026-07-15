@@ -58,6 +58,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             IlitoolsRunner.Timeout timeout = new IlitoolsRunner.Timeout(5, TimeUnit.SECONDS);
             ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, List.of("--version"), null, timeout).get();
             return HealthCheckResponse.ServingStatus.SERVING;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return HealthCheckResponse.ServingStatus.NOT_SERVING;
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Health check failed: ili2gpkg is not available.", e);
             return HealthCheckResponse.ServingStatus.NOT_SERVING;

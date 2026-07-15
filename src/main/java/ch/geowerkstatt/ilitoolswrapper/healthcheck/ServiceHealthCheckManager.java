@@ -20,6 +20,7 @@ public final class ServiceHealthCheckManager implements AutoCloseable {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, THREAD_FACTORY);
     private final HealthStatusManager healthStatusManager = new HealthStatusManager();
     private final ServiceHealthCheck[] services;
+    private boolean closed;
 
     /**
      * Creates a new ServiceHealthCheckManager that periodically checks the health of the given services.
@@ -45,14 +46,21 @@ public final class ServiceHealthCheckManager implements AutoCloseable {
      */
     @Override
     public void close() {
-        healthStatusManager.enterTerminalState();
-        scheduler.shutdown();
+        if (!closed) {
+            closed = true;
+            healthStatusManager.enterTerminalState();
+            scheduler.shutdownNow();
+        }
     }
 
     private void checkHealth() {
         HealthCheckResponse.ServingStatus combinedStatus = HealthCheckResponse.ServingStatus.SERVING;
 
         for (ServiceHealthCheck service : services) {
+            if (closed) {
+                return;
+            }
+
             HealthCheckResponse.ServingStatus status = service.getHealthStatus();
             healthStatusManager.setStatus(service.getServiceName(), status);
 
