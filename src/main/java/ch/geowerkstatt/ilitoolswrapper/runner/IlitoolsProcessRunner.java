@@ -3,7 +3,6 @@ package ch.geowerkstatt.ilitoolswrapper.runner;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 
 import javax.annotation.Nullable;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,23 +12,43 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeoutException;
 
 public final class IlitoolsProcessRunner implements IlitoolsRunner {
     private final Map<Tool, String> toolPaths = new HashMap<>();
 
     @Override
-    public CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable ProcessingFile logFile) throws IOException {
+    public CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable ProcessingFile logFile, @Nullable Timeout timeout) throws IOException {
         ProcessBuilder processBuilder = new ProcessBuilder();
         processBuilder.command(buildCommand(tool, args));
-        if (logFile != null) {
-            File processLogFile = logFile.filePath().toFile();
-            processBuilder.redirectOutput(processLogFile);
-            processBuilder.redirectError(processLogFile);
-        }
+
+        ProcessBuilder.Redirect logRedirect = logFile != null
+                ? ProcessBuilder.Redirect.to(logFile.filePath().toFile())
+                : ProcessBuilder.Redirect.DISCARD;
+        processBuilder.redirectOutput(logRedirect);
+        processBuilder.redirectError(logRedirect);
 
         Process process = processBuilder.start();
-        return process.onExit()
-                .thenCompose(p -> p.exitValue() == 0 ? CompletableFuture.completedStage(null) : CompletableFuture.failedStage(new RuntimeException(tool + " exited with code " + p.exitValue())));
+        CompletableFuture<Process> processFuture = process.onExit();
+        if (timeout != null) {
+            processFuture = processFuture.completeOnTimeout(process, timeout.duration(), timeout.unit());
+        }
+        return processFuture.thenCompose(p -> handleProcessResult(p, tool));
+    }
+
+    private CompletionStage<Void> handleProcessResult(Process process, Tool tool) {
+        if (process.isAlive()) {
+            process.destroy();
+            return CompletableFuture.failedStage(new TimeoutException("Tool " + tool + " timed out."));
+        }
+
+        if (process.exitValue() != 0) {
+            String errorMessage = "Tool " + tool + " exited with code " + process.exitValue();
+            return CompletableFuture.failedStage(new RuntimeException(errorMessage));
+        }
+
+        return CompletableFuture.completedStage(null);
     }
 
     private List<String> buildCommand(Tool tool, List<String> args) {

@@ -55,7 +55,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     @Override
     public HealthCheckResponse.ServingStatus getHealthStatus() {
         try {
-            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, List.of("--version"), null).get(5, TimeUnit.SECONDS);
+            IlitoolsRunner.Timeout timeout = new IlitoolsRunner.Timeout(5, TimeUnit.SECONDS);
+            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, List.of("--version"), null, timeout).get();
             return HealthCheckResponse.ServingStatus.SERVING;
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Health check failed: ili2gpkg is not available.", e);
@@ -186,7 +187,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
 
                 ProcessingArguments processingArguments = parsedArguments.get();
-                ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, processingArguments.arguments(), logFile)
+                ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, processingArguments.arguments(), logFile, null)
                         .thenAcceptAsync(_ -> returnResponse(true, processingArguments.outputFileType()))
                         .exceptionallyAsync(t -> {
                             LOGGER.warning("Processing data with ili2gpkg failed: " + t);

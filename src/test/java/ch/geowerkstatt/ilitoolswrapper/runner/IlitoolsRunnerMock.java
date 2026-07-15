@@ -11,7 +11,7 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     private Exception exception;
 
     @Override
-    public CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable ProcessingFile logFile) {
+    public CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable ProcessingFile logFile, @Nullable Timeout timeout) {
         lastArguments = List.copyOf(args);
         return exception == null ? CompletableFuture.completedFuture(null) : CompletableFuture.failedFuture(exception);
     }
