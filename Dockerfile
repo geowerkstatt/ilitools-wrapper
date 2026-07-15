@@ -52,4 +52,9 @@ USER $APP_UID
 COPY --from=build /src/build/install/ilitools-wrapper ${HOME}
 COPY --from=build /opt/ili2gpkg ${ILI2GPKG_HOME}
 
+LABEL org.opencontainers.image.title="ilitools-wrapper" \
+      org.opencontainers.image.description="A service that provides INTERLIS ilitools functionality over gRPC connections." \
+      org.opencontainers.image.source="https://github.com/geowerkstatt/ilitools-wrapper" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
 ENTRYPOINT ["./bin/ilitools-wrapper"]
