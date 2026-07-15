@@ -49,7 +49,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
     @Override
     public String getServiceName() {
-        return "Ili2gpkgService";
+        return Ili2gpkgServiceGrpc.SERVICE_NAME;
     }
 
     @Override

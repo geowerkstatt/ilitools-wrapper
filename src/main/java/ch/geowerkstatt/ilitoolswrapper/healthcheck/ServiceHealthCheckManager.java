@@ -1,6 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper.healthcheck;
 
 import io.grpc.BindableService;
+import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.protobuf.services.HealthStatusManager;
 
 import java.util.concurrent.Executors;
@@ -49,8 +50,17 @@ public final class ServiceHealthCheckManager implements AutoCloseable {
     }
 
     private void checkHealth() {
+        HealthCheckResponse.ServingStatus combinedStatus = HealthCheckResponse.ServingStatus.SERVING;
+
         for (ServiceHealthCheck service : services) {
-            healthStatusManager.setStatus(service.getServiceName(), service.getHealthStatus());
+            HealthCheckResponse.ServingStatus status = service.getHealthStatus();
+            healthStatusManager.setStatus(service.getServiceName(), status);
+
+            if (status == HealthCheckResponse.ServingStatus.NOT_SERVING) {
+                combinedStatus = HealthCheckResponse.ServingStatus.NOT_SERVING;
+            }
         }
+
+        healthStatusManager.setStatus(HealthStatusManager.SERVICE_NAME_ALL_SERVICES, combinedStatus);
     }
 }
