@@ -7,7 +7,10 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -17,6 +20,7 @@ public final class IlitoolsWrapperServer {
     private static final Logger LOGGER = Logger.getLogger(IlitoolsWrapperServer.class.getName());
 
     private final Server server;
+    private final List<AutoCloseable> closeableResources = new ArrayList<>();
 
     /**
      * Creates a new server to listen on the specified port with the given services.
@@ -53,6 +57,14 @@ public final class IlitoolsWrapperServer {
      * Stops the server and waits for termination.
      */
     public void stop() throws InterruptedException {
+        for (AutoCloseable closeable : closeableResources) {
+            try {
+                closeable.close();
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Failed to close resource on shutdown.", e);
+            }
+        }
+
         server.shutdown().awaitTermination(30, TimeUnit.SECONDS);
     }
 
@@ -61,5 +73,14 @@ public final class IlitoolsWrapperServer {
      */
     public void blockUntilShutdown() throws InterruptedException {
         server.awaitTermination();
+    }
+
+    /**
+     * Registers a resource to be closed when the server shuts down.
+     *
+     * @param closeable the resource to close on shutdown
+     */
+    public void closeOnShutdown(AutoCloseable closeable) {
+        closeableResources.add(closeable);
     }
 }

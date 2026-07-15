@@ -31,6 +31,7 @@ public final class Main {
                 serviceHealthCheckManager.getHealthService(),
                 ili2gpkgService
         );
+        server.closeOnShutdown(serviceHealthCheckManager);
         server.start();
         server.blockUntilShutdown();
     }
