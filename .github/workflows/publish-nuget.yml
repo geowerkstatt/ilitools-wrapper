@@ -33,13 +33,15 @@ jobs:
 
       - name: Set environment variables
         run: |
-          if [ -n "${{ inputs.version-tag }}" ]; then
-            version_tag=${{ inputs.version-tag }}
-            version=${version_tag#v}
+          if [ -n "${VERSION_TAG}" ]; then
+            version=${VERSION_TAG#v}
           else
-            version="$(cat VERSION)${{ inputs.version-suffix }}"
+            version="$(cat VERSION)${VERSION_SUFFIX}"
           fi
           echo VERSION=$version >> $GITHUB_ENV
+        env:
+          VERSION_TAG: ${{ inputs.version-tag }}
+          VERSION_SUFFIX: ${{ inputs.version-suffix }}
 
       - name: Setup dotnet
         uses: actions/setup-dotnet@v5
@@ -47,7 +49,10 @@ jobs:
           dotnet-version: "10.0"
 
       - name: Pack NuGet package
-        run: dotnet pack stub/Geowerkstatt.IlitoolsWrapperApi/Geowerkstatt.IlitoolsWrapperApi.csproj -c Release -p:Version=${{ env.VERSION }} -o nuget-artifacts
+        run: dotnet pack stub/Geowerkstatt.IlitoolsWrapperApi/Geowerkstatt.IlitoolsWrapperApi.csproj -c Release "-p:Version=$VERSION" -o nuget-artifacts
 
       - name: Push NuGet package to GitHub Packages
-        run: dotnet nuget push "nuget-artifacts/*.nupkg" --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
+        run: dotnet nuget push "nuget-artifacts/*.nupkg" --source "https://nuget.pkg.github.com/${REPO_OWNER}/index.json" --api-key "$GITHUB_TOKEN" --skip-duplicate
+        env:
+          REPO_OWNER: ${{ github.repository_owner }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

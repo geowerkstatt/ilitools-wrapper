@@ -89,7 +89,7 @@ jobs:
           push-to-registry: true
 
       - name: Create GitHub pre-release
-        run: gh release create "v${{ env.VERSION }}" --title "${{ env.VERSION }}" --prerelease --target ${{ github.ref }}
+        run: gh release create "v$VERSION" --title "$VERSION" --prerelease --target "$GITHUB_SHA"
 
 
   publish-nuget:

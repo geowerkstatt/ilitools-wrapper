@@ -26,7 +26,7 @@ jobs:
       - name: Set environment variables
         run: |
           version=${TAG_NAME#v} && major=${version%%.*}
-          echo VERSION=${TAG_NAME#v} >> $GITHUB_ENV
+          echo VERSION=${version} >> $GITHUB_ENV
           echo MAJOR=${major} >> $GITHUB_ENV
           echo IMAGE_NAME=$REGISTRY/$(echo ${GITHUB_REPOSITORY,,}) >> $GITHUB_ENV
 
@@ -38,17 +38,17 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull docker image
-        run: docker pull ${{ env.IMAGE_NAME }}:v${{ env.VERSION }}
+        run: docker pull "$IMAGE_NAME:v$VERSION"
 
       - name: Tag docker image
         run: |
-          docker tag ${{ env.IMAGE_NAME }}:v${{ env.VERSION }} ${{ env.IMAGE_NAME }}:latest
-          docker tag ${{ env.IMAGE_NAME }}:v${{ env.VERSION }} ${{ env.IMAGE_NAME }}:v${{ env.MAJOR }}
+          docker tag "$IMAGE_NAME:v$VERSION" "$IMAGE_NAME:latest"
+          docker tag "$IMAGE_NAME:v$VERSION" "$IMAGE_NAME:v$MAJOR"
 
       - name: Push docker image
         run: |
-          docker push ${{ env.IMAGE_NAME }}:latest
-          docker push ${{ env.IMAGE_NAME }}:v${{ env.MAJOR }}
+          docker push "$IMAGE_NAME:latest"
+          docker push "$IMAGE_NAME:v$MAJOR"
 
   publish-nuget:
     name: Publish Geowerkstatt.IlitoolsWrapperApi NuGet package
