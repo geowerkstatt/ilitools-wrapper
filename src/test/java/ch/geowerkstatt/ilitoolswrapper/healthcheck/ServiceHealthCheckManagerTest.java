@@ -10,25 +10,19 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import static org.junit.jupiter.api.Assertions.*;
 
 public final class ServiceHealthCheckManagerTest {
-    private static final long AWAIT_TIMEOUT_SECONDS = 10;
-
     @Test
-    void initialCheckPollsEveryService() throws InterruptedException {
+    void initialCheckPollsEveryService() {
         RecordingServiceHealthCheck first = new RecordingServiceHealthCheck("first", ServingStatus.SERVING);
         RecordingServiceHealthCheck second = new RecordingServiceHealthCheck("second", ServingStatus.NOT_SERVING);
 
-        try (ServiceHealthCheckManager _ = new ServiceHealthCheckManager(first, second)) {
-            assertTrue(first.awaitPoll(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS), "First service should be polled.");
-            assertTrue(second.awaitPoll(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS), "Second service should be polled.");
+        try (ServiceHealthCheckManager manager = new ServiceHealthCheckManager(first, second)) {
+            manager.checkHealth();
 
             assertTrue(first.statusChecks() >= 1, "First service health status should be queried.");
             assertTrue(second.statusChecks() >= 1, "Second service health status should be queried.");
@@ -46,13 +40,12 @@ public final class ServiceHealthCheckManagerTest {
 
     @ParameterizedTest
     @MethodSource("checkPropagatesStateProvider")
-    void checkPropagatesState(ServingStatus combined, ServingStatus firstStatus, ServingStatus secondStatus) throws InterruptedException {
+    void checkPropagatesState(ServingStatus combined, ServingStatus firstStatus, ServingStatus secondStatus) {
         RecordingServiceHealthCheck first = new RecordingServiceHealthCheck("first", firstStatus);
         RecordingServiceHealthCheck second = new RecordingServiceHealthCheck("second", secondStatus);
 
         try (ServiceHealthCheckManager manager = new ServiceHealthCheckManager(first, second)) {
-            assertTrue(first.awaitPoll(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS), "First service should be polled.");
-            assertTrue(second.awaitPoll(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS), "Second service should be polled.");
+            manager.checkHealth();
 
             assertTrue(first.statusChecks() >= 1, "First service health status should be queried.");
             assertTrue(second.statusChecks() >= 1, "Second service health status should be queried.");
@@ -64,26 +57,25 @@ public final class ServiceHealthCheckManagerTest {
     }
 
     @Test
-    void returnsNotServingAfterClose() throws InterruptedException {
+    void returnsNotServingAfterClose() {
         RecordingServiceHealthCheck service = new RecordingServiceHealthCheck("service", ServingStatus.SERVING);
         ServiceHealthCheckManager manager = new ServiceHealthCheckManager(service);
 
-        assertTrue(service.awaitPoll(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS), "Service should be polled before closing.");
+        manager.checkHealth();
         assertServiceState(manager, "service", ServingStatus.SERVING);
         assertServiceState(manager, HealthStatusManager.SERVICE_NAME_ALL_SERVICES, ServingStatus.SERVING);
 
         manager.close();
-
         assertServiceState(manager, "service", ServingStatus.NOT_SERVING);
         assertServiceState(manager, HealthStatusManager.SERVICE_NAME_ALL_SERVICES, ServingStatus.NOT_SERVING);
     }
 
     @Test
-    void closeCanBeCalledRepeatedly() throws InterruptedException {
+    void closeCanBeCalledRepeatedly() {
         RecordingServiceHealthCheck service = new RecordingServiceHealthCheck("service", ServingStatus.SERVING);
         ServiceHealthCheckManager manager = new ServiceHealthCheckManager(service);
 
-        assertTrue(service.awaitPoll(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS), "Service should be polled before closing.");
+        manager.checkHealth();
 
         assertDoesNotThrow(manager::close);
         assertDoesNotThrow(manager::close);
@@ -94,6 +86,7 @@ public final class ServiceHealthCheckManagerTest {
         assertDoesNotThrow(() -> {
             try (ServiceHealthCheckManager manager = new ServiceHealthCheckManager()) {
                 assertNotNull(manager);
+                manager.checkHealth();
                 assertServiceState(manager, HealthStatusManager.SERVICE_NAME_ALL_SERVICES, ServingStatus.SERVING);
             }
         });
@@ -114,20 +107,15 @@ public final class ServiceHealthCheckManagerTest {
     private static final class RecordingServiceHealthCheck implements ServiceHealthCheck {
         private final String name;
         private final ServingStatus status;
-        private final AtomicInteger statusChecks = new AtomicInteger();
-        private final CountDownLatch polled = new CountDownLatch(1);
+        private int statusChecks;
 
         RecordingServiceHealthCheck(String name, ServingStatus status) {
             this.name = name;
             this.status = status;
         }
 
-        boolean awaitPoll(long timeout, TimeUnit unit) throws InterruptedException {
-            return polled.await(timeout, unit);
-        }
-
         int statusChecks() {
-            return statusChecks.get();
+            return statusChecks;
         }
 
         @Override
@@ -137,8 +125,7 @@ public final class ServiceHealthCheckManagerTest {
 
         @Override
         public ServingStatus getHealthStatus() {
-            statusChecks.incrementAndGet();
-            polled.countDown();
+            statusChecks++;
             return status;
         }
     }

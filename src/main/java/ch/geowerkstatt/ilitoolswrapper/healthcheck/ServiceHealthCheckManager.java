@@ -53,7 +53,7 @@ public final class ServiceHealthCheckManager implements AutoCloseable {
         }
     }
 
-    private void checkHealth() {
+    void checkHealth() {
         HealthCheckResponse.ServingStatus combinedStatus = HealthCheckResponse.ServingStatus.SERVING;
 
         for (ServiceHealthCheck service : services) {
