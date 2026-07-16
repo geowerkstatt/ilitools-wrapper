@@ -33,6 +33,7 @@ dependencies {
     implementation("io.grpc:grpc-protobuf")
     implementation("io.grpc:grpc-services")
     implementation("io.grpc:grpc-stub")
+    implementation("org.jspecify:jspecify:1.0.0")
 
     runtimeOnly("io.grpc:grpc-netty-shaded")
 

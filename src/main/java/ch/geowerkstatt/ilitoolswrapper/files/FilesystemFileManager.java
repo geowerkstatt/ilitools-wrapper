@@ -1,6 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
-import javax.annotation.Nonnull;
+import org.jspecify.annotations.Nullable;
+
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -36,22 +37,20 @@ public final class FilesystemFileManager implements FileManager {
         Path path = basePath.resolve(folderName);
         Files.walkFileTree(path, new SimpleFileVisitor<>() {
             @Override
-            @Nonnull
-            public FileVisitResult postVisitDirectory(@Nonnull Path dir, IOException exc) throws IOException {
+            public FileVisitResult postVisitDirectory(Path dir, @Nullable IOException exc) throws IOException {
                 Files.delete(dir);
                 return super.postVisitDirectory(dir, exc);
             }
 
             @Override
-            @Nonnull
-            public FileVisitResult visitFile(@Nonnull Path file, @Nonnull BasicFileAttributes attrs) throws IOException {
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 Files.delete(file);
                 return super.visitFile(file, attrs);
             }
         });
     }
 
-    private void checkFileExtension(String fileExtension) {
+    private void checkFileExtension(@Nullable String fileExtension) {
         if (fileExtension == null || fileExtension.isEmpty()) {
             throw new IllegalArgumentException("File extension cannot be null or empty.");
         }
