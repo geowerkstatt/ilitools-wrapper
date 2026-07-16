@@ -52,6 +52,7 @@ jobs:
 
   publish-nuget:
     name: Publish Geowerkstatt.IlitoolsWrapperApi NuGet package
+    needs: retag-docker-image
     uses: ./.github/workflows/publish-nuget.yml
     permissions:
       contents: read

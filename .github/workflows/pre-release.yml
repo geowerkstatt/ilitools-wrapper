@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -94,6 +98,7 @@ jobs:
 
   publish-nuget:
     name: Publish Geowerkstatt.IlitoolsWrapperApi NuGet package
+    needs: create-pre-release
     uses: ./.github/workflows/publish-nuget.yml
     permissions:
       contents: read
