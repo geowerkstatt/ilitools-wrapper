@@ -93,7 +93,7 @@ jobs:
 
 
   publish-nuget:
-    name: Publish Geowerkstatt.IlitoosWrapperApi NuGet package
+    name: Publish Geowerkstatt.IlitoolsWrapperApi NuGet package
     uses: ./.github/workflows/publish-nuget.yml
     permissions:
       contents: read

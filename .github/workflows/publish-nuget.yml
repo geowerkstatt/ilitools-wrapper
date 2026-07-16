@@ -47,7 +47,7 @@ jobs:
           dotnet-version: "10.0"
 
       - name: Pack NuGet package
-        run: dotnet pack stub/Geowerkstatt.IlitoosWrapperApi/Geowerkstatt.IlitoosWrapperApi.csproj -c Release -p:Version=${{ env.VERSION }} -o nuget-artifacts
+        run: dotnet pack stub/Geowerkstatt.IlitoolsWrapperApi/Geowerkstatt.IlitoolsWrapperApi.csproj -c Release -p:Version=${{ env.VERSION }} -o nuget-artifacts
 
       - name: Push NuGet package to GitHub Packages
         run: dotnet nuget push "nuget-artifacts/*.nupkg" --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
