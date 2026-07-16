@@ -1,5 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
+import org.jspecify.annotations.Nullable;
+
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,7 +12,7 @@ import java.util.List;
  */
 public final class InMemoryFileManager implements FileManager {
     private final List<InMemoryProcessingFile> createdFiles = new ArrayList<>();
-    private RuntimeException failure;
+    private @Nullable RuntimeException failure;
 
     public void failNextCreationWith(RuntimeException exception) {
         this.failure = exception;

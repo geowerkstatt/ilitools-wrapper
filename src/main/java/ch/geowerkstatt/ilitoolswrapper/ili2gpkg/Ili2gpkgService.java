@@ -192,11 +192,14 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
 
                 ProcessingArguments processingArguments = parsedArguments.get();
-                ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, processingArguments.arguments(), logFile, null)
-                        .thenAcceptAsync(_ -> returnResponse(true, processingArguments.outputFileType()))
-                        .exceptionallyAsync(t -> {
-                            LOGGER.warning("Processing data with ili2gpkg failed: " + t);
-                            returnResponse(false, processingArguments.outputFileType());
+                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, processingArguments.arguments(), logFile, null)
+                        .handleAsync((_, throwable) -> {
+                            if (throwable != null) {
+                                LOGGER.warning("Processing data with ili2gpkg failed: " + throwable);
+                            }
+
+                            boolean success = throwable == null;
+                            returnResponse(success, processingArguments.outputFileType());
                             return null;
                         });
             } catch (Exception e) {

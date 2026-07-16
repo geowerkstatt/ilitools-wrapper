@@ -1,6 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper;
 
 import io.grpc.stub.StreamObserver;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,7 +13,7 @@ import java.util.concurrent.CompletableFuture;
 public final class RecordingStreamObserver<T> implements StreamObserver<T> {
     private final List<T> values = new ArrayList<>();
     private final CompletableFuture<Void> completion = new CompletableFuture<>();
-    private Throwable error;
+    private @Nullable Throwable error;
     private boolean completed;
 
     @Override
@@ -36,7 +37,7 @@ public final class RecordingStreamObserver<T> implements StreamObserver<T> {
         return values;
     }
 
-    public Throwable error() {
+    public @Nullable Throwable error() {
         return error;
     }
 

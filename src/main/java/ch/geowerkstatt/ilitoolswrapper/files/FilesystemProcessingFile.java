@@ -1,5 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -9,8 +11,8 @@ import java.nio.file.StandardOpenOption;
 
 public final class FilesystemProcessingFile implements ProcessingFile {
     private final Path filePath;
-    private InputStream inputStream;
-    private OutputStream outputStream;
+    private @Nullable InputStream inputStream;
+    private @Nullable OutputStream outputStream;
 
     /**
      * Creates a new {@link FilesystemProcessingFile} for the specified file path. The underlying file is not

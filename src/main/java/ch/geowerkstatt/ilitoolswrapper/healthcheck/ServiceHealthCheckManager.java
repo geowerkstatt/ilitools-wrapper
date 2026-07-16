@@ -29,7 +29,7 @@ public final class ServiceHealthCheckManager implements AutoCloseable {
      */
     public ServiceHealthCheckManager(ServiceHealthCheck... services) {
         this.services = services;
-        scheduler.scheduleWithFixedDelay(this::checkHealth, 0, 5, TimeUnit.MINUTES);
+        var _ = scheduler.scheduleWithFixedDelay(this::checkHealth, 0, 5, TimeUnit.MINUTES);
     }
 
     /**

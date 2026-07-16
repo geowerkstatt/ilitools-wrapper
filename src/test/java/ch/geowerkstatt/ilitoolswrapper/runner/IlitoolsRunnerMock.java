@@ -9,8 +9,8 @@ import java.util.concurrent.CompletableFuture;
 public final class IlitoolsRunnerMock implements IlitoolsRunner {
     public record Arguments(Tool tool, List<String> args, @Nullable ProcessingFile logFile, @Nullable Timeout timeout) { }
 
-    private Arguments lastArguments;
-    private Exception exception;
+    private @Nullable Arguments lastArguments;
+    private @Nullable Exception exception;
 
     @Override
     public CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable ProcessingFile logFile, @Nullable Timeout timeout) {
@@ -23,7 +23,7 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
      *
      * @return the arguments of the last run, or {@code null} if the runner was never invoked
      */
-    public Arguments lastArguments() {
+    public @Nullable Arguments lastArguments() {
         return lastArguments;
     }
 
