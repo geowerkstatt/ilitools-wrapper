@@ -1,0 +1,15 @@
+<Project>
+
+  <PropertyGroup>
+    <Product>ilitools-wrapper</Product>
+    <Authors>geowerkstatt GmbH</Authors>
+    <Company>geowerkstatt GmbH</Company>
+    <Copyright>© geowerkstatt GmbH</Copyright>
+    <PackageProjectUrl>https://github.com/geowerkstatt/ilitools-wrapper</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/geowerkstatt/ilitools-wrapper.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <AnalysisLevel>10.0-recommended</AnalysisLevel>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>
