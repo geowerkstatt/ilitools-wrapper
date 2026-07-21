@@ -2,6 +2,7 @@ package ch.geowerkstatt.ilitoolswrapper;
 
 import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.FilesystemFileManager;
+import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheckManager;
 import ch.geowerkstatt.ilitoolswrapper.ili2gpkg.Ili2gpkgService;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsProcessRunner;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
@@ -20,11 +21,17 @@ public final class Main {
         final IlitoolsRunner ilitoolsRunner = new IlitoolsProcessRunner();
         final Ili2gpkgService ili2gpkgService = new Ili2gpkgService(fileManager, ilitoolsRunner);
 
+        final ServiceHealthCheckManager serviceHealthCheckManager = new ServiceHealthCheckManager(
+                ili2gpkgService
+        );
+
         final IlitoolsWrapperServer server = new IlitoolsWrapperServer(
                 getPort(),
                 ProtoReflectionServiceV1.newInstance(),
+                serviceHealthCheckManager.getHealthService(),
                 ili2gpkgService
         );
+        server.closeOnShutdown(serviceHealthCheckManager);
         server.start();
         server.blockUntilShutdown();
     }

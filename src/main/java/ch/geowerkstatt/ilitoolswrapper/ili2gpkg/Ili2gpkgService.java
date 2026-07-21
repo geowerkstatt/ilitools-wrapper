@@ -2,6 +2,7 @@ package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
 import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
+import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheck;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
@@ -12,7 +13,9 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.StatusUpdate;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
+import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.stub.StreamObserver;
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -20,13 +23,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceImplBase {
+public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceImplBase implements ServiceHealthCheck {
     private record ProcessingArguments(Ili2gpkgFileType outputFileType, List<String> arguments) { }
 
     private static final Logger LOGGER = Logger.getLogger(Ili2gpkgService.class.getName());
@@ -45,6 +50,26 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     }
 
     @Override
+    public String getServiceName() {
+        return Ili2gpkgServiceGrpc.SERVICE_NAME;
+    }
+
+    @Override
+    public HealthCheckResponse.ServingStatus getHealthStatus() {
+        try {
+            IlitoolsRunner.Timeout timeout = new IlitoolsRunner.Timeout(5, TimeUnit.SECONDS);
+            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, List.of("--version"), null, timeout).get();
+            return HealthCheckResponse.ServingStatus.SERVING;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return HealthCheckResponse.ServingStatus.NOT_SERVING;
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Health check failed: ili2gpkg is not available.", e);
+            return HealthCheckResponse.ServingStatus.NOT_SERVING;
+        }
+    }
+
+    @Override
     public StreamObserver<ConvertRequest> convert(StreamObserver<ConvertResponse> responseObserver) {
         return new ConvertObserver(responseObserver);
     }
@@ -53,8 +78,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         private final StreamObserver<ConvertResponse> responseObserver;
         private final UUID sessionId = UUID.randomUUID();
         private final Map<Ili2gpkgFileType, List<ProcessingFile>> files = new HashMap<>();
-        private ProcessingFile currentFile;
-        private ConvertRequestInfo info;
+        private @Nullable ProcessingFile currentFile;
+        private @Nullable ConvertRequestInfo info;
 
         ConvertObserver(StreamObserver<ConvertResponse> responseObserver) {
             this.responseObserver = responseObserver;
@@ -167,11 +192,14 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
 
                 ProcessingArguments processingArguments = parsedArguments.get();
-                ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, processingArguments.arguments(), logFile)
-                        .thenAcceptAsync(_ -> returnResponse(true, processingArguments.outputFileType()))
-                        .exceptionallyAsync(t -> {
-                            LOGGER.warning("Processing data with ili2gpkg failed: " + t);
-                            returnResponse(false, processingArguments.outputFileType());
+                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, processingArguments.arguments(), logFile, null)
+                        .handleAsync((_, throwable) -> {
+                            if (throwable != null) {
+                                LOGGER.warning("Processing data with ili2gpkg failed: " + throwable);
+                            }
+
+                            boolean success = throwable == null;
+                            returnResponse(success, processingArguments.outputFileType());
                             return null;
                         });
             } catch (Exception e) {
@@ -221,7 +249,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             ProcessingFile dbFile;
             Ili2gpkgFileType outputFileType;
             List<String> args = new ArrayList<>();
-            switch (info.getOperation()) {
+            switch (Objects.requireNonNull(info).getOperation()) {
                 case OPERATION_SCHEMA_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
                     subjects = getSingleFile(Ili2gpkgFileType.MODEL_FILE).map(List::of).orElse(null);
@@ -297,10 +325,11 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     returnFile(responseObserver, outputFileType);
                 }
                 responseObserver.onCompleted();
-                deleteFiles();
             } catch (IOException e) {
                 LOGGER.log(Level.WARNING, "Failed to return file data.", e);
                 cancelWithError(Status.ABORTED.withDescription("Failed to return file data."));
+            } finally {
+                deleteFiles();
             }
         }
 

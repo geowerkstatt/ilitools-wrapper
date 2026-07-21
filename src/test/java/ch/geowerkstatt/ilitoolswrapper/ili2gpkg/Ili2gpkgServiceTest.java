@@ -1,5 +1,6 @@
 package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
+import ch.geowerkstatt.ilitoolswrapper.RecordingStreamObserver;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryFileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
@@ -11,6 +12,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunnerMock;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
+import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -130,8 +132,12 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        List<String> args = ilitoolsRunner.lastArguments();
-        assertNotNull(args, "The runner should have been invoked.");
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
+        assertNotNull(arguments.logFile(), "The runner should redirect the output to a log file.");
+
+        List<String> args = arguments.args();
         assertArgumentWithValue(args, "--models", "ModelA;ModelB");
         assertArgumentWithValue(args, "--defaultSrsCode", "2056");
         assertTrue(args.contains("--disableValidation"));
@@ -155,8 +161,12 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        List<String> args = ilitoolsRunner.lastArguments();
-        assertNotNull(args, "The runner should have been invoked.");
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
+        assertNotNull(arguments.logFile(), "The runner should redirect the output to a log file.");
+
+        List<String> args = arguments.args();
         assertFalse(args.contains("--models"));
         assertFalse(args.contains("--defaultSrsCode"));
         assertFalse(args.contains("--disableValidation"));
@@ -176,6 +186,7 @@ public final class Ili2gpkgServiceTest {
 
         requestObserver.onNext(chunk("data"));
 
+        assertNotNull(responseObserver.error());
         assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
         assertTrue(fileManager.createdFiles().isEmpty());
     }
@@ -186,6 +197,7 @@ public final class Ili2gpkgServiceTest {
 
         requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
 
+        assertNotNull(responseObserver.error());
         assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
         assertTrue(fileManager.createdFiles().isEmpty());
     }
@@ -197,6 +209,7 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onNext(info());
         requestObserver.onNext(info());
 
+        assertNotNull(responseObserver.error());
         assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
     }
 
@@ -235,6 +248,31 @@ public final class Ili2gpkgServiceTest {
 
         assertNull(responseObserver.error());
         assertHasResponses(false, Ili2gpkgFileType.LOG_FILE);
+    }
+
+    @Test
+    void returnsHealthyOnSuccess() {
+        assertEquals(HealthCheckResponse.ServingStatus.SERVING, service.getHealthStatus());
+
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
+        assertEquals(List.of("--version"), arguments.args());
+        assertNull(arguments.logFile());
+        assertNotNull(arguments.timeout(), "The health check should use a timeout.");
+    }
+
+    @Test
+    void returnsUnhealthyOnError() {
+        ilitoolsRunner.failRunWith(new RuntimeException("process failed"));
+        assertEquals(HealthCheckResponse.ServingStatus.NOT_SERVING, service.getHealthStatus());
+
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
+        assertEquals(List.of("--version"), arguments.args());
+        assertNull(arguments.logFile());
+        assertNotNull(arguments.timeout(), "The health check should use a timeout.");
     }
 
     private static void assertArgumentWithValue(List<String> args, String name, String value) {

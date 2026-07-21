@@ -1,8 +1,11 @@
+import net.ltgt.gradle.errorprone.errorprone
+
 plugins {
     id("java")
     id("application")
     id("checkstyle")
     id("com.google.protobuf") version "0.9.5"
+    id("net.ltgt.errorprone") version "5.1.0"
 }
 
 group = "ch.geowerkstatt.ilitoolswrapper"
@@ -33,6 +36,10 @@ dependencies {
     implementation("io.grpc:grpc-protobuf")
     implementation("io.grpc:grpc-services")
     implementation("io.grpc:grpc-stub")
+    implementation("org.jspecify:jspecify:1.0.0")
+
+    errorprone("com.google.errorprone:error_prone_core:2.50.0")
+    errorprone("com.uber.nullaway:nullaway:0.13.7")
 
     runtimeOnly("io.grpc:grpc-netty-shaded")
 
@@ -60,6 +67,16 @@ sourceSets {
         proto {
             srcDir("./proto")
         }
+    }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.errorprone {
+        excludedPaths = ".*/generated/.*"
+
+        option("NullAway:JSpecifyMode", "true")
+        option("NullAway:AnnotatedPackages", "ch.geowerkstatt.ilitoolswrapper")
+        error("NullAway")
     }
 }
 
