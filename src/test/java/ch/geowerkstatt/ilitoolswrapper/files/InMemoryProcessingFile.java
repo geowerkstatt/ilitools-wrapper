@@ -25,9 +25,6 @@ public final class InMemoryProcessingFile implements ProcessingFile {
 
     @Override
     public InputStream inputStream() {
-        if (closed) {
-            throw new IllegalStateException("Cannot read from a closed file.");
-        }
         return InputStream.nullInputStream();
     }
 

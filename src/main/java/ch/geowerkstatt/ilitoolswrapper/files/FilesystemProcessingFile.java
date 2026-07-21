@@ -16,7 +16,7 @@ public final class FilesystemProcessingFile implements ProcessingFile {
 
     /**
      * Creates a new {@link FilesystemProcessingFile} for the specified file path. The underlying file is not
-     * created until {@link #outputStream()} is called.
+     * created until {@link #inputStream()} or {@link #outputStream()} is called.
      *
      * @param filePath the path of the file to write to
      */

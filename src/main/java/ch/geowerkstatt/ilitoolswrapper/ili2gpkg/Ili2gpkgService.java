@@ -268,6 +268,12 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     dbFile = getSingleFile(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--export");
                 }
+                case OPERATION_UPDATE -> {
+                    outputFileType = Ili2gpkgFileType.DB_FILE;
+                    subjects = files.get(Ili2gpkgFileType.TRANSFER_FILE);
+                    dbFile = getSingleFile(Ili2gpkgFileType.DB_FILE).orElse(null);
+                    args.add("--update");
+                }
                 default -> throw new IllegalArgumentException("Unsupported operation: " + info.getOperation());
             }
 
@@ -286,6 +292,11 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             if (info.getDefaultSrsCode() > 0) {
                 args.add("--defaultSrsCode");
                 args.add(Integer.toString(info.getDefaultSrsCode()));
+            }
+
+            if (!info.getDataset().isEmpty()) {
+                args.add("--dataset");
+                args.add(info.getDataset());
             }
 
             addFlag(args, "--disableValidation", info.getDisableValidation());

@@ -26,6 +26,7 @@ enum ConvertOperation {
   OPERATION_SCHEMA_IMPORT = 0;
   OPERATION_IMPORT = 1;
   OPERATION_EXPORT = 2;
+  OPERATION_UPDATE = 3;
 }
 
 message ConvertRequestInfo {
@@ -39,6 +40,7 @@ message ConvertRequestInfo {
   bool skipGeometryErrors = 8;
   bool importTid = 9;
   bool strokeArcs = 10;
+  string dataset = 11;
 }
 
 message ConvertRequest {

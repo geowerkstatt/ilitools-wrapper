@@ -16,10 +16,14 @@ import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -180,6 +184,35 @@ public final class Ili2gpkgServiceTest {
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
+    public static Stream<Arguments> expectedFileTypeProvider() {
+        return Stream.of(
+                Arguments.of(ConvertOperation.OPERATION_SCHEMA_IMPORT, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.MODEL_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_IMPORT, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.TRANSFER_FILE, Ili2gpkgFileType.DB_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_EXPORT, Ili2gpkgFileType.TRANSFER_FILE, List.of(Ili2gpkgFileType.DB_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_UPDATE, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.TRANSFER_FILE, Ili2gpkgFileType.DB_FILE))
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("expectedFileTypeProvider")
+    void operationReturnsExpectedFileType(ConvertOperation operation, Ili2gpkgFileType resultType, List<Ili2gpkgFileType> inputFiles) {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(info(operation));
+        for (Ili2gpkgFileType inputFile : inputFiles) {
+            requestObserver.onNext(fileStart(inputFile));
+            requestObserver.onNext(chunk("data"));
+        }
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, resultType);
+    }
+
     @Test
     void chunkBeforeInfoIsRejected() {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
@@ -305,9 +338,13 @@ public final class Ili2gpkgServiceTest {
     }
 
     private static ConvertRequest info() {
+        return info(ConvertOperation.OPERATION_SCHEMA_IMPORT);
+    }
+
+    private static ConvertRequest info(ConvertOperation operation) {
         return ConvertRequest.newBuilder()
                 .setInfo(ConvertRequestInfo.newBuilder()
-                        .setOperation(ConvertOperation.OPERATION_SCHEMA_IMPORT))
+                        .setOperation(operation))
                 .build();
     }
 
