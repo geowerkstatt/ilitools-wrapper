@@ -1,8 +1,8 @@
 package ch.geowerkstatt.ilitoolswrapper.runner;
 
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
+import org.jspecify.annotations.Nullable;
 
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;

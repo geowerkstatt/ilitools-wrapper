@@ -186,6 +186,7 @@ public final class Ili2gpkgServiceTest {
 
         requestObserver.onNext(chunk("data"));
 
+        assertNotNull(responseObserver.error());
         assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
         assertTrue(fileManager.createdFiles().isEmpty());
     }
@@ -196,6 +197,7 @@ public final class Ili2gpkgServiceTest {
 
         requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
 
+        assertNotNull(responseObserver.error());
         assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
         assertTrue(fileManager.createdFiles().isEmpty());
     }
@@ -207,6 +209,7 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onNext(info());
         requestObserver.onNext(info());
 
+        assertNotNull(responseObserver.error());
         assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
     }
 
