@@ -2,7 +2,7 @@ ARG ILI2GPKG_VERSION=5.5.2
 
 FROM gradle:9-jdk25 AS build
 WORKDIR /src
-ARG VERSION=0.0.1
+ARG APP_VERSION=0.0.1
 ARG ILI2GPKG_VERSION
 
 RUN apt-get update \
@@ -19,7 +19,7 @@ COPY proto/ proto/
 COPY src/ src/
 
 # Build project
-RUN gradle -Pversion=$VERSION build installDist
+RUN gradle -Pversion=$APP_VERSION build installDist
 
 
 FROM eclipse-temurin:25-jre AS final
@@ -51,5 +51,10 @@ USER $APP_UID
 # Copy distribution from build stage
 COPY --from=build /src/build/install/ilitools-wrapper ${HOME}
 COPY --from=build /opt/ili2gpkg ${ILI2GPKG_HOME}
+
+LABEL org.opencontainers.image.title="ilitools-wrapper" \
+      org.opencontainers.image.description="A service that provides INTERLIS ilitools functionality over gRPC connections." \
+      org.opencontainers.image.source="https://github.com/geowerkstatt/ilitools-wrapper" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 ENTRYPOINT ["./bin/ilitools-wrapper"]

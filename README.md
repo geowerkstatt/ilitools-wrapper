@@ -1,4 +1,7 @@
 [![CI](https://github.com/geowerkstatt/ilitools-wrapper/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/geowerkstatt/ilitools-wrapper/actions/workflows/ci.yml)
+[![Release](https://github.com/geowerkstatt/ilitools-wrapper/actions/workflows/release.yml/badge.svg)](https://github.com/geowerkstatt/ilitools-wrapper/actions/workflows/release.yml)
+[![Latest Release](https://img.shields.io/github/v/release/geowerkstatt/ilitools-wrapper)](https://github.com/geowerkstatt/ilitools-wrapper/releases/latest)
+[![License](https://img.shields.io/github/license/geowerkstatt/ilitools-wrapper)](https://github.com/geowerkstatt/ilitools-wrapper/blob/main/LICENSE)
 
 # ilitools-wrapper
 

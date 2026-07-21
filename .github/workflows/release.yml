@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      TAG_NAME:
+        description: "Tag name"
+        required: true
+
+env:
+  REGISTRY: ghcr.io
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  TAG_NAME: ${{ github.event.inputs.TAG_NAME || github.event.release.tag_name }}
+
+jobs:
+  retag-docker-image:
+    runs-on: ubuntu-latest
+    name: Retag Docker image as latest
+
+    permissions:
+      packages: write
+
+    steps:
+      - name: Set environment variables
+        run: |
+          version=${TAG_NAME#v} && major=${version%%.*}
+          echo VERSION=${version} >> $GITHUB_ENV
+          echo MAJOR=${major} >> $GITHUB_ENV
+          echo IMAGE_NAME=$REGISTRY/$(echo ${GITHUB_REPOSITORY,,}) >> $GITHUB_ENV
+
+      - name: Log in to the GitHub container registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull docker image
+        run: docker pull "$IMAGE_NAME:v$VERSION"
+
+      - name: Tag docker image
+        run: |
+          docker tag "$IMAGE_NAME:v$VERSION" "$IMAGE_NAME:latest"
+          docker tag "$IMAGE_NAME:v$VERSION" "$IMAGE_NAME:v$MAJOR"
+
+      - name: Push docker image
+        run: |
+          docker push "$IMAGE_NAME:latest"
+          docker push "$IMAGE_NAME:v$MAJOR"
+
+  publish-nuget:
+    name: Publish Geowerkstatt.IlitoolsWrapperApi NuGet package
+    needs: retag-docker-image
+    uses: ./.github/workflows/publish-nuget.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      ref: ${{ github.event.inputs.TAG_NAME || github.event.release.tag_name }}
+      version-tag: ${{ github.event.inputs.TAG_NAME || github.event.release.tag_name }}
+    secrets: inherit
