@@ -39,7 +39,7 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
 
     private CompletionStage<Void> handleProcessResult(Process process, Tool tool) {
         if (process.isAlive()) {
-            process.destroy();
+            process.destroyForcibly();
             return CompletableFuture.failedStage(new TimeoutException("Tool " + tool + " timed out."));
         }
 

@@ -8,19 +8,23 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * A manager that periodically checks the health status of multiple services and provides a gRPC health service.
  */
 public final class ServiceHealthCheckManager implements AutoCloseable {
-    private static final ThreadFactory THREAD_FACTORY = Thread.ofVirtual()
+    private static final Logger LOGGER = Logger.getLogger(ServiceHealthCheckManager.class.getName());
+    private static final ThreadFactory THREAD_FACTORY = Thread.ofPlatform()
             .name("health-check-", 0)
+            .daemon()
             .factory();
 
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, THREAD_FACTORY);
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(THREAD_FACTORY);
     private final HealthStatusManager healthStatusManager = new HealthStatusManager();
     private final ServiceHealthCheck[] services;
-    private boolean closed;
+    private volatile boolean closed;
 
     /**
      * Creates a new ServiceHealthCheckManager that periodically checks the health of the given services.
@@ -29,7 +33,7 @@ public final class ServiceHealthCheckManager implements AutoCloseable {
      */
     public ServiceHealthCheckManager(ServiceHealthCheck... services) {
         this.services = services;
-        var _ = scheduler.scheduleWithFixedDelay(this::checkHealth, 0, 5, TimeUnit.MINUTES);
+        var _ = scheduler.scheduleWithFixedDelay(this::checkHealth, 2, 5 * 60, TimeUnit.SECONDS);
     }
 
     /**
@@ -61,7 +65,13 @@ public final class ServiceHealthCheckManager implements AutoCloseable {
                 return;
             }
 
-            HealthCheckResponse.ServingStatus status = service.getHealthStatus();
+            HealthCheckResponse.ServingStatus status;
+            try {
+                status = service.getHealthStatus();
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Health check for service " + service.getServiceName() + " failed", e);
+                status = HealthCheckResponse.ServingStatus.NOT_SERVING;
+            }
             healthStatusManager.setStatus(service.getServiceName(), status);
 
             if (status == HealthCheckResponse.ServingStatus.NOT_SERVING) {

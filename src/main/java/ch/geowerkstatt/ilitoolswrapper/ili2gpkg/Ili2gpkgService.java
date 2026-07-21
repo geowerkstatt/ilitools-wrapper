@@ -325,10 +325,11 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     returnFile(responseObserver, outputFileType);
                 }
                 responseObserver.onCompleted();
-                deleteFiles();
             } catch (IOException e) {
                 LOGGER.log(Level.WARNING, "Failed to return file data.", e);
                 cancelWithError(Status.ABORTED.withDescription("Failed to return file data."));
+            } finally {
+                deleteFiles();
             }
         }
 
