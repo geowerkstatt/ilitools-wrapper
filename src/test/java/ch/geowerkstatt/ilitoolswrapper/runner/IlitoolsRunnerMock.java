@@ -1,20 +1,21 @@
 package ch.geowerkstatt.ilitoolswrapper.runner;
 
-import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public final class IlitoolsRunnerMock implements IlitoolsRunner {
-    public record Arguments(Tool tool, List<String> args, @Nullable ProcessingFile logFile, @Nullable Timeout timeout) { }
+    public record Arguments(Tool tool, List<String> args, @Nullable Timeout timeout) { }
 
     private @Nullable Arguments lastArguments;
     private @Nullable Exception exception;
 
     @Override
-    public CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable ProcessingFile logFile, @Nullable Timeout timeout) {
-        lastArguments = new Arguments(tool, List.copyOf(args), logFile, timeout);
+    @NonNull
+    public CompletableFuture<Void> run(@NonNull Tool tool, @NonNull List<String> args, @Nullable Timeout timeout) {
+        lastArguments = new Arguments(tool, List.copyOf(args), timeout);
         return exception == null ? CompletableFuture.completedFuture(null) : CompletableFuture.failedFuture(exception);
     }
 

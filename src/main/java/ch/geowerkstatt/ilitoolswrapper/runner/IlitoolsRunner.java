@@ -1,6 +1,5 @@
 package ch.geowerkstatt.ilitoolswrapper.runner;
 
-import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
@@ -34,10 +33,9 @@ public interface IlitoolsRunner {
      *
      * @param tool the tool to invoke
      * @param args the command-line arguments passed to the tool, in order
-     * @param logFile an optional {@link ProcessingFile} to which the tool's standard output and error streams are redirected
      * @param timeout an optional {@link Timeout} specifying the maximum duration to wait for the process to complete
      * @return a CompletableFuture that completes or fails when the process exits or times out
      * @throws IOException if the tool cannot be located or started
      */
-    CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable ProcessingFile logFile, @Nullable Timeout timeout) throws IOException;
+    CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable Timeout timeout) throws IOException;
 }

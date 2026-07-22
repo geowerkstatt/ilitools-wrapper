@@ -1,6 +1,5 @@
 package ch.geowerkstatt.ilitoolswrapper.runner;
 
-import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
@@ -19,15 +18,11 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
     private final Map<Tool, String> toolPaths = new HashMap<>();
 
     @Override
-    public CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable ProcessingFile logFile, @Nullable Timeout timeout) throws IOException {
+    public CompletableFuture<Void> run(Tool tool, List<String> args, @Nullable Timeout timeout) throws IOException {
         ProcessBuilder processBuilder = new ProcessBuilder();
         processBuilder.command(buildCommand(tool, args));
-
-        ProcessBuilder.Redirect logRedirect = logFile != null
-                ? ProcessBuilder.Redirect.to(logFile.filePath().toFile())
-                : ProcessBuilder.Redirect.DISCARD;
-        processBuilder.redirectOutput(logRedirect);
-        processBuilder.redirectError(logRedirect);
+        processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+        processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD);
 
         Process process = processBuilder.start();
         CompletableFuture<Process> processFuture = process.onExit();

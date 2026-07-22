@@ -139,9 +139,9 @@ public final class Ili2gpkgServiceTest {
         IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
-        assertNotNull(arguments.logFile(), "The runner should redirect the output to a log file.");
 
         List<String> args = arguments.args();
+        assertTrue(args.contains("--log"), "The runner should redirect the output to a log file.");
         assertArgumentWithValue(args, "--models", "ModelA;ModelB");
         assertArgumentWithValue(args, "--defaultSrsCode", "2056");
         assertTrue(args.contains("--disableValidation"));
@@ -168,9 +168,9 @@ public final class Ili2gpkgServiceTest {
         IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
-        assertNotNull(arguments.logFile(), "The runner should redirect the output to a log file.");
 
         List<String> args = arguments.args();
+        assertTrue(args.contains("--log"), "The runner should redirect the output to a log file.");
         assertFalse(args.contains("--models"));
         assertFalse(args.contains("--defaultSrsCode"));
         assertFalse(args.contains("--disableValidation"));
@@ -317,7 +317,6 @@ public final class Ili2gpkgServiceTest {
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
         assertEquals(List.of("--version"), arguments.args());
-        assertNull(arguments.logFile());
         assertNotNull(arguments.timeout(), "The health check should use a timeout.");
     }
 
@@ -330,7 +329,6 @@ public final class Ili2gpkgServiceTest {
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
         assertEquals(List.of("--version"), arguments.args());
-        assertNull(arguments.logFile());
         assertNotNull(arguments.timeout(), "The health check should use a timeout.");
     }
 

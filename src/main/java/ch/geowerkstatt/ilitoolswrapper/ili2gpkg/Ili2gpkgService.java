@@ -58,7 +58,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     public HealthCheckResponse.ServingStatus getHealthStatus() {
         try {
             IlitoolsRunner.Timeout timeout = new IlitoolsRunner.Timeout(5, TimeUnit.SECONDS);
-            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, List.of("--version"), null, timeout).get();
+            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, List.of("--version"), timeout).get();
             return HealthCheckResponse.ServingStatus.SERVING;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -182,7 +182,6 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
 
             try {
-                ProcessingFile logFile = createProcessingFile(Ili2gpkgFileType.LOG_FILE, "log", "txt");
                 LOGGER.fine("Processing data with ili2gpkg.");
                 Optional<ProcessingArguments> parsedArguments = convertRequestToArguments();
                 if (parsedArguments.isEmpty()) {
@@ -192,7 +191,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
 
                 ProcessingArguments processingArguments = parsedArguments.get();
-                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, processingArguments.arguments(), logFile, null)
+                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, processingArguments.arguments(), null)
                         .handleAsync((_, throwable) -> {
                             if (throwable != null) {
                                 LOGGER.warning("Processing data with ili2gpkg failed: " + throwable);
@@ -208,8 +207,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
         }
 
-        private ProcessingFile createProcessingFile(Ili2gpkgFileType fileType, String prefix, String extension) {
-            ProcessingFile file = fileManager.createProcessingFile(sessionId.toString(), prefix, extension);
+        private ProcessingFile createProcessingFile(Ili2gpkgFileType fileType, String fileName, String extension) {
+            ProcessingFile file = fileManager.createProcessingFile(sessionId.toString(), fileName, extension);
             files.computeIfAbsent(fileType, _ -> new ArrayList<>()).add(file);
             return file;
         }
@@ -297,6 +296,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             addArgument(args, "--models", String.join(";", info.getModelsList()));
             addArgument(args, "--defaultSrsCode", info.getDefaultSrsCode() > 0 ? Integer.toString(info.getDefaultSrsCode()) : null);
             addArgument(args, "--dataset", info.getDataset());
+
+            ProcessingFile logFile = createProcessingFile(Ili2gpkgFileType.LOG_FILE, "log", "txt");
+            addArgument(args, "--log", logFile.filePath().toAbsolutePath().toString());
 
             addFlag(args, "--disableValidation", info.getDisableValidation());
             addFlag(args, "--createBasketCol", info.getCreateBasketCol());
