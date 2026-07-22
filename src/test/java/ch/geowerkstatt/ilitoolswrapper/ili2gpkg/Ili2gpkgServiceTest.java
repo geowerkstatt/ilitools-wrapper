@@ -184,12 +184,38 @@ public final class Ili2gpkgServiceTest {
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
+    @Test
+    void validateRemovesDisableValidation() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        ConvertRequest request = ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_VALIDATE)
+                        .setDisableValidation(true))
+                .build();
+        requestObserver.onNext(request);
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
+
+        List<String> args = arguments.args();
+        assertFalse(args.contains("--disableValidation"));
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE);
+    }
+
     public static Stream<Arguments> expectedFileTypeProvider() {
         return Stream.of(
                 Arguments.of(ConvertOperation.OPERATION_SCHEMA_IMPORT, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.MODEL_FILE)),
                 Arguments.of(ConvertOperation.OPERATION_IMPORT, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.TRANSFER_FILE, Ili2gpkgFileType.DB_FILE)),
                 Arguments.of(ConvertOperation.OPERATION_EXPORT, Ili2gpkgFileType.TRANSFER_FILE, List.of(Ili2gpkgFileType.DB_FILE)),
-                Arguments.of(ConvertOperation.OPERATION_UPDATE, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.TRANSFER_FILE, Ili2gpkgFileType.DB_FILE))
+                Arguments.of(ConvertOperation.OPERATION_UPDATE, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.TRANSFER_FILE, Ili2gpkgFileType.DB_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_VALIDATE, Ili2gpkgFileType.XTF_LOG_FILE, List.of(Ili2gpkgFileType.DB_FILE))
         );
     }
 

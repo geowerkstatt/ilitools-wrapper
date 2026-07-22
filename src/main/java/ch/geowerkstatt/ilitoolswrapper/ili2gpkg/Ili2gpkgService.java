@@ -274,6 +274,18 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     dbFile = getSingleFile(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--update");
                 }
+                case OPERATION_VALIDATE -> {
+                    outputFileType = Ili2gpkgFileType.XTF_LOG_FILE;
+                    subjects = List.of();
+                    dbFile = getSingleFile(Ili2gpkgFileType.DB_FILE).orElse(null);
+                    ProcessingFile xtfLogFile = createProcessingFile(Ili2gpkgFileType.XTF_LOG_FILE, "log", "xtf");
+                    args.add("--validate");
+                    args.add("--verbose");
+                    addArgument(args, "--xtflog", xtfLogFile.filePath().toAbsolutePath().toString());
+                    info = info.toBuilder()
+                            .setDisableValidation(false)
+                            .build();
+                }
                 default -> throw new IllegalArgumentException("Unsupported operation: " + info.getOperation());
             }
 
@@ -281,23 +293,10 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 return Optional.empty();
             }
 
-            args.add("--dbfile");
-            args.add(dbFile.filePath().toAbsolutePath().toString());
-
-            if (info.getModelsCount() > 0) {
-                args.add("--models");
-                args.add(String.join(";", info.getModelsList()));
-            }
-
-            if (info.getDefaultSrsCode() > 0) {
-                args.add("--defaultSrsCode");
-                args.add(Integer.toString(info.getDefaultSrsCode()));
-            }
-
-            if (!info.getDataset().isEmpty()) {
-                args.add("--dataset");
-                args.add(info.getDataset());
-            }
+            addArgument(args, "--dbfile", dbFile.filePath().toAbsolutePath().toString());
+            addArgument(args, "--models", String.join(";", info.getModelsList()));
+            addArgument(args, "--defaultSrsCode", info.getDefaultSrsCode() > 0 ? Integer.toString(info.getDefaultSrsCode()) : null);
+            addArgument(args, "--dataset", info.getDataset());
 
             addFlag(args, "--disableValidation", info.getDisableValidation());
             addFlag(args, "--createBasketCol", info.getCreateBasketCol());
@@ -307,10 +306,12 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             addFlag(args, "--importTid", info.getImportTid());
             addFlag(args, "--strokeArcs", info.getStrokeArcs());
 
-            String subject = subjects.stream()
-                    .map(file -> file.filePath().toAbsolutePath().toString())
-                    .collect(Collectors.joining(";"));
-            args.add(subject);
+            if (!subjects.isEmpty()) {
+                String subject = subjects.stream()
+                        .map(file -> file.filePath().toAbsolutePath().toString())
+                        .collect(Collectors.joining(";"));
+                args.add(subject);
+            }
             return Optional.of(new ProcessingArguments(outputFileType, args));
         }
 
@@ -325,6 +326,13 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         private static void addFlag(List<String> args, String flag, boolean enabled) {
             if (enabled) {
                 args.add(flag);
+            }
+        }
+
+        private static void addArgument(List<String> args, String argument, @Nullable String value) {
+            if (value != null && !value.isEmpty()) {
+                args.add(argument);
+                args.add(value);
             }
         }
 

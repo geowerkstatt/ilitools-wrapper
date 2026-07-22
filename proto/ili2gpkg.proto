@@ -16,6 +16,7 @@ enum Ili2gpkgFileType {
   MODEL_FILE = 1;
   TRANSFER_FILE = 2;
   LOG_FILE = 3;
+  XTF_LOG_FILE = 4;
 }
 
 message Ili2gpkgFileStart {
@@ -27,6 +28,7 @@ enum ConvertOperation {
   OPERATION_IMPORT = 1;
   OPERATION_EXPORT = 2;
   OPERATION_UPDATE = 3;
+  OPERATION_VALIDATE = 4;
 }
 
 message ConvertRequestInfo {
