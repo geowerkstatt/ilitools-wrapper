@@ -4,15 +4,21 @@ FROM gradle:9-jdk25 AS build
 WORKDIR /src
 ARG APP_VERSION=0.0.1
 ARG ILI2GPKG_VERSION
+ARG GRPCURL_VERSION=1.9.3
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl unzip \
-    && mkdir -p /opt/ili2gpkg \
+    && apt-get install -y --no-install-recommends curl unzip
+
+RUN mkdir -p /opt/ili2gpkg \
     && curl -fsSL -o /tmp/ili2gpkg.zip "https://downloads.interlis.ch/ili2gpkg/ili2gpkg-${ILI2GPKG_VERSION}.zip" \
     && unzip -q /tmp/ili2gpkg.zip -d /opt/ili2gpkg
 
+RUN mkdir -p /opt/grpcurl \
+    && curl -fsSL -o /tmp/grpcurl.tar.gz "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" \
+    && tar -xzf /tmp/grpcurl.tar.gz -C /opt/grpcurl
+
 # Copy project files
-COPY *.gradle.kts gradle.* .
+COPY *.gradle.kts gradle.* ./
 COPY gradle/ gradle/
 COPY config/ config/
 COPY proto/ proto/
@@ -51,10 +57,13 @@ USER $APP_UID
 # Copy distribution from build stage
 COPY --from=build /src/build/install/ilitools-wrapper ${HOME}
 COPY --from=build /opt/ili2gpkg ${ILI2GPKG_HOME}
+COPY --from=build /opt/grpcurl /opt/grpcurl
 
 LABEL org.opencontainers.image.title="ilitools-wrapper" \
       org.opencontainers.image.description="A service that provides INTERLIS ilitools functionality over gRPC connections." \
       org.opencontainers.image.source="https://github.com/geowerkstatt/ilitools-wrapper" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+HEALTHCHECK CMD /opt/grpcurl/grpcurl -plaintext "localhost:${GRPC_PORT:-5555}" grpc.health.v1.Health/Check | grep '"status":\s*"SERVING"' || exit 1
 
 ENTRYPOINT ["./bin/ilitools-wrapper"]
