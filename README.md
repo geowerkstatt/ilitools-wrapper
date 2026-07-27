@@ -62,7 +62,7 @@ Nach der Verarbeitung antwortet der Server mit `ConvertResponse`-Nachrichten in 
 
 1. Ein `StatusUpdate`, das angibt, ob die Verarbeitung erfolgreich war.
 2. Die Log-Datei des ili2gpkg-Prozesses, aufgeteilt in `fileStart` und einen oder mehrere `chunk`s.
-3. Bei Erfolg wird zusätzlich die Ausgabedatei der Operation gesendet, ebenfalls aufgeteilt in `fileStart` und `chunk`s.
+3. Bei Erfolg wird zusätzlich die Ausgabedatei der Operation gesendet, ebenfalls aufgeteilt in `fileStart` und `chunk`s. Bei `OPERATION_VALIDATE` wird das `XTF_LOG_FILE` auch im Fehlerfall gesendet, da es die gemeldeten Validierungsfehler enthält.
 
 ## Testen mit grpcurl
 

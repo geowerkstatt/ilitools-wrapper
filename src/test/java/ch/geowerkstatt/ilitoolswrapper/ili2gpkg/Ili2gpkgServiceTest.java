@@ -310,6 +310,20 @@ public final class Ili2gpkgServiceTest {
     }
 
     @Test
+    void validateReturnsXtfLogOnFailure() {
+        ilitoolsRunner.failRunWith(new RuntimeException("validation failed"));
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(info(ConvertOperation.OPERATION_VALIDATE));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        assertHasResponses(false, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE);
+    }
+
+    @Test
     void returnsHealthyOnSuccess() {
         assertEquals(HealthCheckResponse.ServingStatus.SERVING, service.getHealthStatus());
 

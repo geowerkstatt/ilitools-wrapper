@@ -32,7 +32,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceImplBase implements ServiceHealthCheck {
-    private record ProcessingArguments(Ili2gpkgFileType outputFileType, List<String> arguments) { }
+    private record ProcessingArguments(Ili2gpkgFileType outputFileType, boolean returnOutputOnError, List<String> arguments) { }
 
     private static final Logger LOGGER = Logger.getLogger(Ili2gpkgService.class.getName());
     private final FileManager fileManager;
@@ -198,7 +198,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                             }
 
                             boolean success = throwable == null;
-                            returnResponse(success, processingArguments.outputFileType());
+                            returnResponse(success, processingArguments);
                             return null;
                         });
             } catch (Exception e) {
@@ -247,6 +247,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             List<ProcessingFile> subjects;
             ProcessingFile dbFile;
             Ili2gpkgFileType outputFileType;
+            boolean returnOutputOnError = false;
             List<String> args = new ArrayList<>();
             switch (Objects.requireNonNull(info).getOperation()) {
                 case OPERATION_SCHEMA_IMPORT -> {
@@ -275,6 +276,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
                 case OPERATION_VALIDATE -> {
                     outputFileType = Ili2gpkgFileType.XTF_LOG_FILE;
+                    // The xtf log holds the reported errors, so it is returned even when the validation fails.
+                    returnOutputOnError = true;
                     subjects = List.of();
                     dbFile = getSingleFile(Ili2gpkgFileType.DB_FILE).orElse(null);
                     ProcessingFile xtfLogFile = createProcessingFile(Ili2gpkgFileType.XTF_LOG_FILE, "log", "xtf");
@@ -314,7 +317,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                         .collect(Collectors.joining(";"));
                 args.add(subject);
             }
-            return Optional.of(new ProcessingArguments(outputFileType, args));
+            return Optional.of(new ProcessingArguments(outputFileType, returnOutputOnError, args));
         }
 
         private Optional<ProcessingFile> getSingleFile(Ili2gpkgFileType fileType) {
@@ -338,12 +341,12 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
         }
 
-        private void returnResponse(boolean success, Ili2gpkgFileType outputFileType) {
+        private void returnResponse(boolean success, ProcessingArguments processingArguments) {
             try {
                 responseObserver.onNext(createStatusResponse(success));
                 returnFile(responseObserver, Ili2gpkgFileType.LOG_FILE);
-                if (success) {
-                    returnFile(responseObserver, outputFileType);
+                if (success || processingArguments.returnOutputOnError()) {
+                    returnFile(responseObserver, processingArguments.outputFileType());
                 }
                 responseObserver.onCompleted();
             } catch (IOException e) {
