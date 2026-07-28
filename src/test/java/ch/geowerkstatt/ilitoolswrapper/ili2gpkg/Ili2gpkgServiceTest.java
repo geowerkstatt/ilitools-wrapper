@@ -16,10 +16,14 @@ import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -135,9 +139,9 @@ public final class Ili2gpkgServiceTest {
         IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
-        assertNotNull(arguments.logFile(), "The runner should redirect the output to a log file.");
 
         List<String> args = arguments.args();
+        assertTrue(args.contains("--log"), "The runner should redirect the output to a log file.");
         assertArgumentWithValue(args, "--models", "ModelA;ModelB");
         assertArgumentWithValue(args, "--defaultSrsCode", "2056");
         assertTrue(args.contains("--disableValidation"));
@@ -164,9 +168,9 @@ public final class Ili2gpkgServiceTest {
         IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
-        assertNotNull(arguments.logFile(), "The runner should redirect the output to a log file.");
 
         List<String> args = arguments.args();
+        assertTrue(args.contains("--log"), "The runner should redirect the output to a log file.");
         assertFalse(args.contains("--models"));
         assertFalse(args.contains("--defaultSrsCode"));
         assertFalse(args.contains("--disableValidation"));
@@ -178,6 +182,61 @@ public final class Ili2gpkgServiceTest {
         assertFalse(args.contains("--strokeArcs"));
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+    }
+
+    @Test
+    void validateRemovesDisableValidation() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        ConvertRequest request = ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_VALIDATE)
+                        .setDisableValidation(true))
+                .build();
+        requestObserver.onNext(request);
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
+
+        List<String> args = arguments.args();
+        assertFalse(args.contains("--disableValidation"));
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE);
+    }
+
+    public static Stream<Arguments> expectedFileTypeProvider() {
+        return Stream.of(
+                Arguments.of(ConvertOperation.OPERATION_SCHEMA_IMPORT, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.MODEL_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_IMPORT, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.TRANSFER_FILE, Ili2gpkgFileType.DB_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_EXPORT, Ili2gpkgFileType.TRANSFER_FILE, List.of(Ili2gpkgFileType.DB_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_UPDATE, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.TRANSFER_FILE, Ili2gpkgFileType.DB_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_VALIDATE, Ili2gpkgFileType.XTF_LOG_FILE, List.of(Ili2gpkgFileType.DB_FILE))
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("expectedFileTypeProvider")
+    void operationReturnsExpectedFileType(ConvertOperation operation, Ili2gpkgFileType resultType, List<Ili2gpkgFileType> inputFiles) {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(info(operation));
+        for (Ili2gpkgFileType inputFile : inputFiles) {
+            requestObserver.onNext(fileStart(inputFile));
+            requestObserver.onNext(chunk("data"));
+        }
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, resultType);
     }
 
     @Test
@@ -251,6 +310,20 @@ public final class Ili2gpkgServiceTest {
     }
 
     @Test
+    void validateReturnsXtfLogOnFailure() {
+        ilitoolsRunner.failRunWith(new RuntimeException("validation failed"));
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(info(ConvertOperation.OPERATION_VALIDATE));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        assertHasResponses(false, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE);
+    }
+
+    @Test
     void returnsHealthyOnSuccess() {
         assertEquals(HealthCheckResponse.ServingStatus.SERVING, service.getHealthStatus());
 
@@ -258,7 +331,6 @@ public final class Ili2gpkgServiceTest {
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
         assertEquals(List.of("--version"), arguments.args());
-        assertNull(arguments.logFile());
         assertNotNull(arguments.timeout(), "The health check should use a timeout.");
     }
 
@@ -271,7 +343,6 @@ public final class Ili2gpkgServiceTest {
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
         assertEquals(List.of("--version"), arguments.args());
-        assertNull(arguments.logFile());
         assertNotNull(arguments.timeout(), "The health check should use a timeout.");
     }
 
@@ -305,9 +376,13 @@ public final class Ili2gpkgServiceTest {
     }
 
     private static ConvertRequest info() {
+        return info(ConvertOperation.OPERATION_SCHEMA_IMPORT);
+    }
+
+    private static ConvertRequest info(ConvertOperation operation) {
         return ConvertRequest.newBuilder()
                 .setInfo(ConvertRequestInfo.newBuilder()
-                        .setOperation(ConvertOperation.OPERATION_SCHEMA_IMPORT))
+                        .setOperation(operation))
                 .build();
     }
 

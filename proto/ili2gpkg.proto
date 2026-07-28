@@ -16,6 +16,7 @@ enum Ili2gpkgFileType {
   MODEL_FILE = 1;
   TRANSFER_FILE = 2;
   LOG_FILE = 3;
+  XTF_LOG_FILE = 4;
 }
 
 message Ili2gpkgFileStart {
@@ -26,6 +27,8 @@ enum ConvertOperation {
   OPERATION_SCHEMA_IMPORT = 0;
   OPERATION_IMPORT = 1;
   OPERATION_EXPORT = 2;
+  OPERATION_UPDATE = 3;
+  OPERATION_VALIDATE = 4;
 }
 
 message ConvertRequestInfo {
@@ -39,6 +42,7 @@ message ConvertRequestInfo {
   bool skipGeometryErrors = 8;
   bool importTid = 9;
   bool strokeArcs = 10;
+  string dataset = 11;
 }
 
 message ConvertRequest {
