@@ -128,9 +128,11 @@ tasks.register("downloadIli2gpkg") {
     }
 }
 
-// Automatically download and set up the ilitools on `gradlew run`.
-tasks.named<JavaExec>("run") {
-    dependsOn("downloadIli2gpkg")
-    environment("ILI2GPKG_HOME", ili2gpkgHome.asFile.absolutePath)
-    environment("ILI2GPKG_VERSION", ili2gpkgVersion.get())
+// Automatically download and set up the ilitools on `gradlew run` and `gradlew test`.
+listOf(tasks.run, tasks.test).forEach { task ->
+    task.configure {
+        dependsOn("downloadIli2gpkg")
+        environment("ILI2GPKG_HOME", ili2gpkgHome.asFile.absolutePath)
+        environment("ILI2GPKG_VERSION", ili2gpkgVersion.get())
+    }
 }
