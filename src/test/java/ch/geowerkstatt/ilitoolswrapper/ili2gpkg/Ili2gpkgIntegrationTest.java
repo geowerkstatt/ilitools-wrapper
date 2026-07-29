@@ -15,6 +15,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusException;
 import io.grpc.stub.BlockingClientCall;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,11 +25,15 @@ import org.junit.jupiter.api.Timeout;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,6 +62,16 @@ public final class Ili2gpkgIntegrationTest {
                 .build();
         if (!Files.exists(OUTPUT_DIR)) {
             Files.createDirectories(OUTPUT_DIR);
+        } else {
+            // Delete files in the output directory before running tests
+            Files.walkFileTree(OUTPUT_DIR, new SimpleFileVisitor<>() {
+                @Override
+                @NonNull
+                public FileVisitResult visitFile(@NonNull Path file, @NonNull BasicFileAttributes attrs) throws IOException {
+                    Files.delete(file);
+                    return super.visitFile(file, attrs);
+                }
+            });
         }
     }
 
@@ -82,6 +97,21 @@ public final class Ili2gpkgIntegrationTest {
     }
 
     @Test
+    public void testSchemaImportFailsWithInvalidModel() throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        call.write(info(ConvertOperation.OPERATION_SCHEMA_IMPORT, info -> info.setCreateBasketCol(true)));
+        writeResourceFile(call, Ili2gpkgFileType.MODEL_FILE, "ili2gpkg/model_invalid.ili");
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "schema_import_invalid.gpkg");
+        assertFalse(response.success, "Schema import should have failed. Log:\n" + response.log);
+        assertNotEquals("", response.log, "Log is empty");
+        assertFalse(Files.exists(response.outputFilePath), "Failed schema import should not create a database");
+    }
+
+    @Test
     public void testImport() throws Exception {
         var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
         var call = client.convert();
@@ -97,6 +127,22 @@ public final class Ili2gpkgIntegrationTest {
     }
 
     @Test
+    public void testImportFailsWithInvalidData() throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        call.write(info(ConvertOperation.OPERATION_IMPORT, info -> info.setDataset(DATASET_NAME)));
+        writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/schema.gpkg");
+        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer_invalid.xtf");
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_import_invalid.gpkg");
+        assertFalse(response.success, "Import should have failed. Log:\n" + response.log);
+        assertNotEquals("", response.log, "Log is empty");
+        assertFalse(Files.exists(response.outputFilePath), "Failed import should not create a database");
+    }
+
+    @Test
     public void testExport() throws Exception {
         var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
         var call = client.convert();
@@ -108,6 +154,21 @@ public final class Ili2gpkgIntegrationTest {
         Response response = readResponse(call, Ili2gpkgFileType.TRANSFER_FILE, "data_export.xtf");
         assertTrue(response.success, "Export failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+    }
+
+    @Test
+    public void testExportFailsWithWrongModel() throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        call.write(info(ConvertOperation.OPERATION_EXPORT, info -> info.addModels("WrongModel")));
+        writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/data.gpkg");
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.TRANSFER_FILE, "data_export_invalid.xtf");
+        assertFalse(response.success, "Export should have failed. Log:\n" + response.log);
+        assertNotEquals("", response.log, "Log is empty");
+        assertFalse(Files.exists(response.outputFilePath), "Failed export should not create a transfer file");
     }
 
     @Test
@@ -126,6 +187,22 @@ public final class Ili2gpkgIntegrationTest {
     }
 
     @Test
+    public void testUpdateFailsWithInvalidData() throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        call.write(info(ConvertOperation.OPERATION_UPDATE, info -> info.setDataset(DATASET_NAME)));
+        writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/data.gpkg");
+        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer_invalid.xtf");
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_update_invalid.gpkg");
+        assertFalse(response.success, "Update should have failed. Log:\n" + response.log);
+        assertNotEquals("", response.log, "Log is empty");
+        assertFalse(Files.exists(response.outputFilePath), "Failed update should not create a database");
+    }
+
+    @Test
     public void testValidate() throws Exception {
         var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
         var call = client.convert();
@@ -137,6 +214,21 @@ public final class Ili2gpkgIntegrationTest {
         Response response = readResponse(call, Ili2gpkgFileType.XTF_LOG_FILE, "log.xtf");
         assertTrue(response.success, "Validation failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+    }
+
+    @Test
+    public void testValidateFailsWithInvalidData() throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        call.write(info(ConvertOperation.OPERATION_VALIDATE, info -> info.addModels(MODEL_NAME)));
+        writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/data_invalid.gpkg");
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.XTF_LOG_FILE, "log_failed.xtf");
+        assertFalse(response.success, "Validation should have failed. Log:\n" + response.log);
+        assertNotEquals("", response.log, "Log is empty");
+        assertTrue(Files.exists(response.outputFilePath), "Failed validation should create an xtf log file");
     }
 
     private static Response readResponse(
