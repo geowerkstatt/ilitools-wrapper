@@ -9,7 +9,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgServiceGrpc;
-import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.StatusUpdate;
+import ch.geowerkstatt.ilitoolswrapper.proto.common.StatusUpdate;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;

@@ -12,7 +12,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Protobuf Include="..\..\proto\common.proto" ProtoRoot="..\..\proto" GrpcServices="Client" />
     <Protobuf Include="..\..\proto\ili2gpkg.proto" ProtoRoot="..\..\proto" GrpcServices="Client" />
+    <Protobuf Include="..\..\proto\ilivalidator.proto" ProtoRoot="..\..\proto" GrpcServices="Client" />
   </ItemGroup>
 
   <ItemGroup>
