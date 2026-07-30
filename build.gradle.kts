@@ -95,8 +95,10 @@ tasks.test {
 }
 
 val ili2gpkgVersion = providers.gradleProperty("ili2gpkgVersion")
+val ilivalidatorVersion = providers.gradleProperty("ilivalidatorVersion")
 val ilitoolsHome = layout.projectDirectory.dir("ilitools")
 val ili2gpkgHome = ilitoolsHome.dir("ili2gpkg")
+val ilivalidatorHome = ilitoolsHome.dir("ilivalidator")
 
 // Downloads ili2gpkg into ./ilitools for local development.
 // The version is taken from the ili2gpkgVersion project property (see gradle.properties).
@@ -134,11 +136,45 @@ tasks.register("downloadIli2gpkg") {
     }
 }
 
+// Downloads ilivalidator into ./ilitools for local development.
+// The version is taken from the ilivalidatorVersion project property (see gradle.properties).
+tasks.register("downloadIlivalidator") {
+    group = "ilitools"
+    description = "Downloads ilivalidator into ./ilitools for local development"
+
+    val targetDir = ilivalidatorHome
+
+    inputs.property("version", ilivalidatorVersion)
+    outputs.dir(targetDir)
+
+    doLast {
+        val version = ilivalidatorVersion.orNull ?: throw GradleException("Set -PilivalidatorVersion=<version>.")
+
+        val downloadUrl = uri("https://downloads.interlis.ch/ilivalidator/ilivalidator-$version.zip")
+        val zipFile = temporaryDir.resolve("ilivalidator-$version.zip")
+
+        logger.lifecycle("Downloading $downloadUrl")
+        downloadUrl.toURL().openStream().use { input ->
+            zipFile.outputStream().use { output -> input.copyTo(output) }
+        }
+
+        val dir = targetDir.asFile
+        delete(dir)
+        copy {
+            from(zipTree(zipFile))
+            into(dir)
+        }
+        logger.lifecycle("Extracted ilivalidator $version into $dir")
+    }
+}
+
 // Automatically download and set up the ilitools on `gradlew run` and `gradlew test`.
 listOf(tasks.run, tasks.test).forEach { task ->
     task.configure {
-        dependsOn("downloadIli2gpkg")
+        dependsOn("downloadIli2gpkg", "downloadIlivalidator")
         environment("ILI2GPKG_HOME", ili2gpkgHome.asFile.absolutePath)
         environment("ILI2GPKG_VERSION", ili2gpkgVersion.get())
+        environment("ILIVALIDATOR_HOME", ilivalidatorHome.asFile.absolutePath)
+        environment("ILIVALIDATOR_VERSION", ilivalidatorVersion.get())
     }
 }

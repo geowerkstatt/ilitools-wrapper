@@ -18,6 +18,8 @@ public interface IlitoolsRunner {
     enum Tool {
         /** The {@code ili2gpkg} tool, converting between INTERLIS transfer files and GeoPackage. */
         ILI2GPKG,
+        /** The {@code ilivalidator} tool, validating INTERLIS transfer files against their models. */
+        ILIVALIDATOR,
     }
 
     /**
