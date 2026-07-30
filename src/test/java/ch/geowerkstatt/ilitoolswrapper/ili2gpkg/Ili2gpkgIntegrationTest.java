@@ -21,10 +21,17 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.w3c.dom.Attr;
+import org.xmlunit.builder.DiffBuilder;
+import org.xmlunit.diff.DefaultNodeMatcher;
+import org.xmlunit.diff.Diff;
+import org.xmlunit.diff.Difference;
+import org.xmlunit.diff.ElementSelectors;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,6 +39,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -184,6 +192,11 @@ public final class Ili2gpkgIntegrationTest {
         Response response = readResponse(call, Ili2gpkgFileType.TRANSFER_FILE, "data_export.xtf");
         assertTrue(response.success, "Export failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+
+        try (InputStream expectedStream = getResourceStream("ili2gpkg/expected/export.xtf");
+             InputStream actualStream = Files.newInputStream(response.outputFilePath)) {
+            assertEqualXtfFiles(expectedStream, actualStream);
+        }
     }
 
     @Test
@@ -346,11 +359,46 @@ public final class Ili2gpkgIntegrationTest {
                         .setType(fileType))
                 .build());
 
-        ClassLoader classLoader = Ili2gpkgIntegrationTest.class.getClassLoader();
-        try (InputStream stream = classLoader.getResourceAsStream(resourcePath)) {
+        try (InputStream stream = getResourceStream(resourcePath)) {
             call.write(ConvertRequest.newBuilder()
                     .setChunk(ByteString.readFrom(stream, 32 * 1024))
                     .build());
         }
+    }
+
+    private static InputStream getResourceStream(String resourcePath) throws IOException {
+        ClassLoader classLoader = Ili2gpkgIntegrationTest.class.getClassLoader();
+        InputStream stream = classLoader.getResourceAsStream(resourcePath);
+        if (stream == null) {
+            throw new IOException("Resource not found: " + resourcePath);
+        }
+        return stream;
+    }
+
+    private void assertEqualXtfFiles(InputStream expectedStream, InputStream actualStream) throws IOException {
+        String expectedXml = new String(expectedStream.readAllBytes(), StandardCharsets.UTF_8);
+        String actualXml = new String(actualStream.readAllBytes(), StandardCharsets.UTF_8);
+
+        DefaultNodeMatcher nodeMatcher = new DefaultNodeMatcher(ElementSelectors.byName);
+        Diff diff = DiffBuilder
+                .compare(expectedXml)
+                .withTest(actualXml)
+                .checkForSimilar()
+                .withNodeMatcher(nodeMatcher)
+                .withAttributeFilter(Ili2gpkgIntegrationTest::filterAttributes)
+                .ignoreWhitespace()
+                .ignoreComments()
+                .build();
+
+        for (Difference difference : diff.getDifferences()) {
+            System.out.println(difference);
+        }
+
+        assertFalse(diff.hasDifferences(), "Expected and actual XTF files should be equal.");
+    }
+
+    private static boolean filterAttributes(Attr attr) {
+        // Ignore basket id
+        return !(Objects.equals(attr.getLocalName(), "bid") && Objects.equals(attr.getNamespaceURI(), "http://www.interlis.ch/xtf/2.4/INTERLIS"));
     }
 }
