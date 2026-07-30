@@ -360,9 +360,14 @@ public final class Ili2gpkgIntegrationTest {
                 .build());
 
         try (InputStream stream = getResourceStream(resourcePath)) {
-            call.write(ConvertRequest.newBuilder()
-                    .setChunk(ByteString.readFrom(stream, 32 * 1024))
-                    .build());
+            // send in small chunks to test file streaming
+            byte[] buffer = new byte[32 * 1024];
+            int bytesRead;
+            while ((bytesRead = stream.read(buffer)) > 0) {
+                call.write(ConvertRequest.newBuilder()
+                        .setChunk(ByteString.copyFrom(buffer, 0, bytesRead))
+                        .build());
+            }
         }
     }
 
