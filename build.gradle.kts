@@ -105,9 +105,13 @@ tasks.register("downloadIli2gpkg") {
     description = "Downloads ili2gpkg into ./ilitools for local development"
 
     val targetDir = ili2gpkgHome
+    val jarExists = ili2gpkgVersion.map { version -> targetDir.file("ili2gpkg-$version.jar").asFile.exists() }
 
     inputs.property("version", ili2gpkgVersion)
     outputs.dir(targetDir)
+
+    // Skip when the matching version is already present
+    onlyIf { !jarExists.getOrElse(false) }
 
     doLast {
         val version = ili2gpkgVersion.orNull ?: throw GradleException("Set -Pili2gpkgVersion=<version>.")
