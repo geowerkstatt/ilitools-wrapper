@@ -30,6 +30,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -94,6 +97,20 @@ public final class Ili2gpkgIntegrationTest {
         Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "schema_import.gpkg");
         assertTrue(response.success, "Schema import failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+
+        try (var connection = new GpkgConnection(response.outputFilePath)) {
+            connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
+            connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
+            connection.assertHasTable("gpkg_contents", Set.of("table_name", "data_type", "identifier", "description", "last_change", "min_x", "min_y", "max_x", "max_y", "srs_id"));
+            connection.assertHasTable("gpkg_geometry_columns", Set.of("table_name", "column_name", "geometry_type_name", "srs_id", "z", "m"));
+            connection.assertHasTable("gpkg_spatial_ref_sys", Set.of("srs_name", "srs_id", "organization", "organization_coordsys_id", "definition", "description"));
+
+            connection.assertData("classa", "T_Id", List.of());
+            connection.assertData("apoint", "T_Id", List.of());
+            connection.assertData("gpkg_geometry_columns", "table_name", List.of(
+                    Map.of("table_name", "apoint", "column_name", "ageometry", "geometry_type_name", "POINT", "srs_id", 2056, "z", 0, "m", 0)
+            ));
+        }
     }
 
     @Test
@@ -124,6 +141,19 @@ public final class Ili2gpkgIntegrationTest {
         Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_import.gpkg");
         assertTrue(response.success, "Import failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+
+        try (var connection = new GpkgConnection(response.outputFilePath)) {
+            connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
+            connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
+
+            connection.assertData("classa", "T_Id", List.of(
+                    Map.of("T_Ili_Tid", "11111111-1111-4111-8111-111111111111", "aname", "Alpha"),
+                    Map.of("T_Ili_Tid", "22222222-2222-4222-8222-222222222222", "aname", "Beta")
+            ));
+            connection.assertData("apoint", "T_Id", List.of(
+                    Map.of("T_Ili_Tid", "33333333-3333-4333-8333-333333333333")
+            ));
+        }
     }
 
     @Test
@@ -176,14 +206,30 @@ public final class Ili2gpkgIntegrationTest {
         var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
         var call = client.convert();
 
-        call.write(info(ConvertOperation.OPERATION_UPDATE, info -> info.setDataset(DATASET_NAME)));
+        call.write(info(ConvertOperation.OPERATION_UPDATE, info -> {
+            info.setDataset(DATASET_NAME);
+            info.setDisableValidation(true); // allow import of data with a name that is too short for the constraint
+        }));
         writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/data.gpkg");
-        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer.xtf");
+        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer_invalid.xtf");
         call.halfClose();
 
         Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_update.gpkg");
         assertTrue(response.success, "Update failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+
+        try (var connection = new GpkgConnection(response.outputFilePath)) {
+            connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
+            connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
+
+            connection.assertData("classa", "T_Id", List.of(
+                    Map.of("T_Ili_Tid", "11111111-1111-4111-8111-111111111111", "aname", "Alpha"),
+                    Map.of("T_Ili_Tid", "22222222-2222-4222-8222-222222222222", "aname", "B")
+            ));
+            connection.assertData("apoint", "T_Id", List.of(
+                    Map.of("T_Ili_Tid", "33333333-3333-4333-8333-333333333333")
+            ));
+        }
     }
 
     @Test
