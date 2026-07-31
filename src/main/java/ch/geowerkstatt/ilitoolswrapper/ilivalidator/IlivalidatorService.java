@@ -2,6 +2,7 @@ package ch.geowerkstatt.ilitoolswrapper.ilivalidator;
 
 import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
+import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFileSet;
 import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheck;
 import ch.geowerkstatt.ilitoolswrapper.proto.common.StatusUpdate;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
@@ -20,12 +21,9 @@ import org.jspecify.annotations.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -73,8 +71,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
 
     private final class ValidateObserver implements StreamObserver<ValidateRequest> {
         private final StreamObserver<ValidateResponse> responseObserver;
-        private final UUID sessionId = UUID.randomUUID();
-        private final Map<IlivalidatorFileType, List<ProcessingFile>> files = new HashMap<>();
+        private final ProcessingFileSet<IlivalidatorFileType> files = new ProcessingFileSet<>(fileManager);
         private @Nullable ProcessingFile currentFile;
         private @Nullable ValidateRequestInfo info;
 
@@ -125,7 +122,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
 
             try {
                 int fileNumber = files.size() + 1;
-                currentFile = createProcessingFile(type, "file" + fileNumber, extension);
+                currentFile = files.create(type, "file" + fileNumber, extension);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
@@ -159,7 +156,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         @Override
         public void onError(Throwable t) {
             LOGGER.log(Level.WARNING, "Error in validate", t);
-            deleteFiles();
+            files.deleteAll();
         }
 
         @Override
@@ -170,7 +167,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 return;
             }
 
-            if (!closeFiles()) {
+            if (!files.closeAll()) {
                 LOGGER.warning("Failed to close output files, aborting validation.");
                 cancelWithError(Status.ABORTED.withDescription("Failed to receive file data."));
                 return;
@@ -201,54 +198,23 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             }
         }
 
-        private ProcessingFile createProcessingFile(IlivalidatorFileType fileType, String fileName, String extension) {
-            ProcessingFile file = fileManager.createProcessingFile(sessionId.toString(), fileName, extension);
-            files.computeIfAbsent(fileType, _ -> new ArrayList<>()).add(file);
-            return file;
-        }
-
         private void cancelWithError(Status status) {
             responseObserver.onError(status.asRuntimeException());
-            deleteFiles();
-        }
-
-        private void deleteFiles() {
-            closeFiles();
-            try {
-                fileManager.deleteProcessingFiles(sessionId.toString());
-            } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Failed to delete processing files.", e);
-            }
-            files.clear();
-        }
-
-        private boolean closeFiles() {
-            boolean success = true;
-            for (List<ProcessingFile> files : files.values()) {
-                for (ProcessingFile file : files) {
-                    try {
-                        file.close();
-                    } catch (Exception e) {
-                        LOGGER.log(Level.WARNING, "Failed to close processing file.", e);
-                        success = false;
-                    }
-                }
-            }
-            return success;
+            files.deleteAll();
         }
 
         private Optional<List<String>> validateRequestToArguments() {
-            Optional<ProcessingFile> transferFile = getSingleFile(IlivalidatorFileType.TRANSFER_FILE);
+            Optional<ProcessingFile> transferFile = files.getSingle(IlivalidatorFileType.TRANSFER_FILE);
             if (transferFile.isEmpty()) {
                 return Optional.empty();
             }
 
             List<String> args = new ArrayList<>();
 
-            ProcessingFile logFile = createProcessingFile(IlivalidatorFileType.LOG_FILE, "log", "txt");
+            ProcessingFile logFile = files.create(IlivalidatorFileType.LOG_FILE, "log", "txt");
             addArgument(args, "--log", logFile.filePath().toAbsolutePath().toString());
 
-            ProcessingFile xtfLogFile = createProcessingFile(IlivalidatorFileType.XTF_LOG_FILE, "log", "xtf");
+            ProcessingFile xtfLogFile = files.create(IlivalidatorFileType.XTF_LOG_FILE, "log", "xtf");
             addArgument(args, "--xtflog", xtfLogFile.filePath().toAbsolutePath().toString());
 
             ValidateRequestInfo requestInfo = Objects.requireNonNull(info);
@@ -261,14 +227,6 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
 
             args.add(transferFile.get().filePath().toAbsolutePath().toString());
             return Optional.of(args);
-        }
-
-        private Optional<ProcessingFile> getSingleFile(IlivalidatorFileType fileType) {
-            List<ProcessingFile> filesOfType = files.get(fileType);
-            if (filesOfType == null || filesOfType.size() != 1) {
-                return Optional.empty();
-            }
-            return Optional.of(filesOfType.getFirst());
         }
 
         private static void addFlag(List<String> args, String flag, boolean enabled) {
@@ -294,7 +252,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 LOGGER.log(Level.WARNING, "Failed to return file data.", e);
                 cancelWithError(Status.ABORTED.withDescription("Failed to return file data."));
             } finally {
-                deleteFiles();
+                files.deleteAll();
             }
         }
 
@@ -307,7 +265,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         }
 
         private void returnFile(StreamObserver<ValidateResponse> responseObserver, IlivalidatorFileType fileType) throws IOException {
-            ProcessingFile file = getSingleFile(fileType)
+            ProcessingFile file = files.getSingle(fileType)
                     .orElseThrow(() -> new IllegalStateException("Expected a single file of type " + fileType + " to return."));
             try (InputStream inputStream = file.inputStream()) {
                 responseObserver.onNext(ValidateResponse.newBuilder()

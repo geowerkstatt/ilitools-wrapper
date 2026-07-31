@@ -2,6 +2,7 @@ package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
 import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
+import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFileSet;
 import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheck;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
@@ -20,12 +21,9 @@ import org.jspecify.annotations.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -76,8 +74,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
     private final class ConvertObserver implements StreamObserver<ConvertRequest> {
         private final StreamObserver<ConvertResponse> responseObserver;
-        private final UUID sessionId = UUID.randomUUID();
-        private final Map<Ili2gpkgFileType, List<ProcessingFile>> files = new HashMap<>();
+        private final ProcessingFileSet<Ili2gpkgFileType> files = new ProcessingFileSet<>(fileManager);
         private @Nullable ProcessingFile currentFile;
         private @Nullable ConvertRequestInfo info;
 
@@ -130,7 +127,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
             try {
                 int fileNumber = files.size() + 1;
-                currentFile = createProcessingFile(type, "file" + fileNumber, extension);
+                currentFile = files.create(type, "file" + fileNumber, extension);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
@@ -164,7 +161,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         @Override
         public void onError(Throwable t) {
             LOGGER.log(Level.WARNING, "Error in convert", t);
-            deleteFiles();
+            files.deleteAll();
         }
 
         @Override
@@ -175,7 +172,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 return;
             }
 
-            if (!closeFiles()) {
+            if (!files.closeAll()) {
                 LOGGER.warning("Failed to close output files, aborting conversion.");
                 cancelWithError(Status.ABORTED.withDescription("Failed to receive file data."));
                 return;
@@ -207,40 +204,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
         }
 
-        private ProcessingFile createProcessingFile(Ili2gpkgFileType fileType, String fileName, String extension) {
-            ProcessingFile file = fileManager.createProcessingFile(sessionId.toString(), fileName, extension);
-            files.computeIfAbsent(fileType, _ -> new ArrayList<>()).add(file);
-            return file;
-        }
-
         private void cancelWithError(Status status) {
             responseObserver.onError(status.asRuntimeException());
-            deleteFiles();
-        }
-
-        private void deleteFiles() {
-            closeFiles();
-            try {
-                fileManager.deleteProcessingFiles(sessionId.toString());
-            } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Failed to delete processing files.", e);
-            }
-            files.clear();
-        }
-
-        private boolean closeFiles() {
-            boolean success = true;
-            for (List<ProcessingFile> files : files.values()) {
-                for (ProcessingFile file : files) {
-                    try {
-                        file.close();
-                    } catch (Exception e) {
-                        LOGGER.log(Level.WARNING, "Failed to close processing file.", e);
-                        success = false;
-                    }
-                }
-            }
-            return success;
+            files.deleteAll();
         }
 
         private Optional<ProcessingArguments> convertRequestToArguments() {
@@ -252,26 +218,26 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             switch (Objects.requireNonNull(info).getOperation()) {
                 case OPERATION_SCHEMA_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
-                    subjects = getSingleFile(Ili2gpkgFileType.MODEL_FILE).map(List::of).orElse(null);
-                    dbFile = createProcessingFile(Ili2gpkgFileType.DB_FILE, "output", "gpkg");
+                    subjects = files.getSingle(Ili2gpkgFileType.MODEL_FILE).map(List::of).orElse(null);
+                    dbFile = files.create(Ili2gpkgFileType.DB_FILE, "output", "gpkg");
                     args.add("--schemaimport");
                 }
                 case OPERATION_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
-                    subjects = files.get(Ili2gpkgFileType.TRANSFER_FILE);
-                    dbFile = getSingleFile(Ili2gpkgFileType.DB_FILE).orElse(null);
+                    subjects = files.getAll(Ili2gpkgFileType.TRANSFER_FILE).orElse(null);
+                    dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--import");
                 }
                 case OPERATION_EXPORT -> {
                     outputFileType = Ili2gpkgFileType.TRANSFER_FILE;
-                    subjects = List.of(createProcessingFile(Ili2gpkgFileType.TRANSFER_FILE, "output", "xtf"));
-                    dbFile = getSingleFile(Ili2gpkgFileType.DB_FILE).orElse(null);
+                    subjects = List.of(files.create(Ili2gpkgFileType.TRANSFER_FILE, "output", "xtf"));
+                    dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--export");
                 }
                 case OPERATION_UPDATE -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
-                    subjects = files.get(Ili2gpkgFileType.TRANSFER_FILE);
-                    dbFile = getSingleFile(Ili2gpkgFileType.DB_FILE).orElse(null);
+                    subjects = files.getAll(Ili2gpkgFileType.TRANSFER_FILE).orElse(null);
+                    dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--update");
                 }
                 case OPERATION_VALIDATE -> {
@@ -279,8 +245,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     // The xtf log holds the reported errors, so it is returned even when the validation fails.
                     returnOutputOnError = true;
                     subjects = List.of();
-                    dbFile = getSingleFile(Ili2gpkgFileType.DB_FILE).orElse(null);
-                    ProcessingFile xtfLogFile = createProcessingFile(Ili2gpkgFileType.XTF_LOG_FILE, "log", "xtf");
+                    dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
+                    ProcessingFile xtfLogFile = files.create(Ili2gpkgFileType.XTF_LOG_FILE, "log", "xtf");
                     args.add("--validate");
                     args.add("--verbose");
                     addArgument(args, "--xtflog", xtfLogFile.filePath().toAbsolutePath().toString());
@@ -300,7 +266,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             addArgument(args, "--defaultSrsCode", info.getDefaultSrsCode() > 0 ? Integer.toString(info.getDefaultSrsCode()) : null);
             addArgument(args, "--dataset", info.getDataset());
 
-            ProcessingFile logFile = createProcessingFile(Ili2gpkgFileType.LOG_FILE, "log", "txt");
+            ProcessingFile logFile = files.create(Ili2gpkgFileType.LOG_FILE, "log", "txt");
             addArgument(args, "--log", logFile.filePath().toAbsolutePath().toString());
 
             addFlag(args, "--disableValidation", info.getDisableValidation());
@@ -318,14 +284,6 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 args.add(subject);
             }
             return Optional.of(new ProcessingArguments(outputFileType, returnOutputOnError, args));
-        }
-
-        private Optional<ProcessingFile> getSingleFile(Ili2gpkgFileType fileType) {
-            List<ProcessingFile> filesOfType = files.get(fileType);
-            if (filesOfType == null || filesOfType.size() != 1) {
-                return Optional.empty();
-            }
-            return Optional.of(filesOfType.getFirst());
         }
 
         private static void addFlag(List<String> args, String flag, boolean enabled) {
@@ -353,7 +311,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 LOGGER.log(Level.WARNING, "Failed to return file data.", e);
                 cancelWithError(Status.ABORTED.withDescription("Failed to return file data."));
             } finally {
-                deleteFiles();
+                files.deleteAll();
             }
         }
 
@@ -366,7 +324,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         }
 
         private void returnFile(StreamObserver<ConvertResponse> responseObserver, Ili2gpkgFileType fileType) throws IOException {
-            ProcessingFile file = getSingleFile(fileType)
+            ProcessingFile file = files.getSingle(fileType)
                     .orElseThrow(() -> new IllegalStateException("Expected a single file of type " + fileType + " to return."));
             try (InputStream inputStream = file.inputStream()) {
                 responseObserver.onNext(ConvertResponse.newBuilder()
