@@ -79,3 +79,16 @@ Dabei kann über `host.docker.internal` auf den lokalen Service zugegriffen werd
 ```bash
 docker run --rm fullstorydev/grpcurl -plaintext host.docker.internal:5555 list
 ```
+
+## Entwicklung mit VS Code
+
+### Tests über Gradle ausführen
+
+Damit die Tests im Test Explorer über Gradle statt über den integrierten Java-Test-Runner laufen, muss das Testprofil `Delegate Test to Gradle` als Standard gesetzt werden.
+Voraussetzung sind die Erweiterungen [Test Runner for Java](https://marketplace.visualstudio.com/items?itemName=vscjava.vscode-java-test) und [Gradle for Java](https://marketplace.visualstudio.com/items?itemName=vscjava.vscode-gradle).
+
+1. Die Ansicht **Testing** öffnen.
+2. Im Split-Button **Run tests** im Header oben in der Testing-Ansicht **Select Default Profile** wählen.
+3. **Delegate Test to Gradle** als Standardprofil auswählen.
+
+Das Standard-Profil muss einmalig ausgewählt werden und lässt sich derzeit nicht über `settings.json` konfigurieren.
