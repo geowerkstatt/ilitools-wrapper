@@ -38,14 +38,16 @@ dependencies {
     implementation("io.grpc:grpc-stub")
     implementation("org.jspecify:jspecify:1.0.0")
 
+    runtimeOnly("io.grpc:grpc-netty-shaded")
+
     errorprone("com.google.errorprone:error_prone_core:2.50.0")
     errorprone("com.uber.nullaway:nullaway:0.13.7")
-
-    runtimeOnly("io.grpc:grpc-netty-shaded")
 
     testImplementation(platform("org.junit:junit-bom:6.0.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly("org.xerial:sqlite-jdbc:3.53.2.1")
+    testImplementation("org.xmlunit:xmlunit-core:2.12.0")
 }
 
 protobuf {
@@ -103,9 +105,13 @@ tasks.register("downloadIli2gpkg") {
     description = "Downloads ili2gpkg into ./ilitools for local development"
 
     val targetDir = ili2gpkgHome
+    val jarExists = ili2gpkgVersion.map { version -> targetDir.file("ili2gpkg-$version.jar").asFile.exists() }
 
     inputs.property("version", ili2gpkgVersion)
     outputs.dir(targetDir)
+
+    // Skip when the matching version is already present
+    onlyIf { !jarExists.getOrElse(false) }
 
     doLast {
         val version = ili2gpkgVersion.orNull ?: throw GradleException("Set -Pili2gpkgVersion=<version>.")
@@ -128,9 +134,11 @@ tasks.register("downloadIli2gpkg") {
     }
 }
 
-// Automatically download and set up the ilitools on `gradlew run`.
-tasks.named<JavaExec>("run") {
-    dependsOn("downloadIli2gpkg")
-    environment("ILI2GPKG_HOME", ili2gpkgHome.asFile.absolutePath)
-    environment("ILI2GPKG_VERSION", ili2gpkgVersion.get())
+// Automatically download and set up the ilitools on `gradlew run` and `gradlew test`.
+listOf(tasks.run, tasks.test).forEach { task ->
+    task.configure {
+        dependsOn("downloadIli2gpkg")
+        environment("ILI2GPKG_HOME", ili2gpkgHome.asFile.absolutePath)
+        environment("ILI2GPKG_VERSION", ili2gpkgVersion.get())
+    }
 }
