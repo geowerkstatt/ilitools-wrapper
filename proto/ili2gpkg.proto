@@ -3,9 +3,11 @@ syntax = "proto3";
 option java_multiple_files = true;
 option java_package = "ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg";
 option java_outer_classname = "Ili2gpkgProto";
-option csharp_namespace = "Geowerkstatt.IlitoolsWrapperApi";
+option csharp_namespace = "Geowerkstatt.IlitoolsWrapperApi.Ili2gpkg";
 
 package ilitoolswrapper.ili2gpkg;
+
+import "common.proto";
 
 service Ili2gpkgService {
   rpc Convert(stream ConvertRequest) returns (stream ConvertResponse) {}
@@ -53,13 +55,9 @@ message ConvertRequest {
   }
 }
 
-message StatusUpdate {
-  bool success = 1;
-}
-
 message ConvertResponse {
   oneof payload {
-    StatusUpdate status = 1;
+    ilitoolswrapper.common.StatusUpdate status = 1;
     Ili2gpkgFileStart fileStart = 2;
     bytes chunk = 3;
   }

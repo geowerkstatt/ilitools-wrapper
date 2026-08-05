@@ -1,9 +1,11 @@
 ARG ILI2GPKG_VERSION=5.5.2
+ARG ILIVALIDATOR_VERSION=1.15.0
 
 FROM gradle:9-jdk25 AS build
 WORKDIR /src
 ARG APP_VERSION=0.0.1
 ARG ILI2GPKG_VERSION
+ARG ILIVALIDATOR_VERSION
 ARG GRPCURL_VERSION=1.9.3
 
 RUN apt-get update \
@@ -12,6 +14,10 @@ RUN apt-get update \
 RUN mkdir -p /opt/ili2gpkg \
     && curl -fsSL -o /tmp/ili2gpkg.zip "https://downloads.interlis.ch/ili2gpkg/ili2gpkg-${ILI2GPKG_VERSION}.zip" \
     && unzip -q /tmp/ili2gpkg.zip -d /opt/ili2gpkg
+
+RUN mkdir -p /opt/ilivalidator \
+    && curl -fsSL -o /tmp/ilivalidator.zip "https://downloads.interlis.ch/ilivalidator/ilivalidator-${ILIVALIDATOR_VERSION}.zip" \
+    && unzip -q /tmp/ilivalidator.zip -d /opt/ilivalidator
 
 RUN mkdir -p /opt/grpcurl \
     && curl -fsSL -o /tmp/grpcurl.tar.gz "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" \
@@ -33,8 +39,11 @@ ENV HOME=/app
 WORKDIR ${HOME}
 
 ARG ILI2GPKG_VERSION
+ARG ILIVALIDATOR_VERSION
 ENV ILI2GPKG_VERSION=${ILI2GPKG_VERSION} \
     ILI2GPKG_HOME=/opt/ili2gpkg \
+    ILIVALIDATOR_VERSION=${ILIVALIDATOR_VERSION} \
+    ILIVALIDATOR_HOME=/opt/ilivalidator \
     ILI_CACHE=/var/cache/ilicache \
     PROCESSING_DIR=/app/processing
 
@@ -57,6 +66,7 @@ USER $APP_UID
 # Copy distribution from build stage
 COPY --from=build /src/build/install/ilitools-wrapper ${HOME}
 COPY --from=build /opt/ili2gpkg ${ILI2GPKG_HOME}
+COPY --from=build /opt/ilivalidator ${ILIVALIDATOR_HOME}
 COPY --from=build /opt/grpcurl /opt/grpcurl
 
 LABEL org.opencontainers.image.title="ilitools-wrapper" \

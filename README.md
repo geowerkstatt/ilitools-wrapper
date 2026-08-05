@@ -21,6 +21,8 @@ Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Dock
 | `PROCESSING_DIR` | `processing` | Basis-Verzeichnis für temporäre Dateien während der Prozessierung |
 | `ILI2GPKG_HOME` | Aus Dockerfile oder Gradle `run` Task | Verzeichnis der ili2gpkg Installation |
 | `ILI2GPKG_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ili2gpkg Tools |
+| `ILIVALIDATOR_HOME` | Aus Dockerfile oder Gradle `run` Task | Verzeichnis der ilivalidator Installation |
+| `ILIVALIDATOR_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ilivalidator Tools |
 
 ## Ili2gpkg service
 
@@ -63,6 +65,54 @@ Nach der Verarbeitung antwortet der Server mit `ConvertResponse`-Nachrichten in 
 1. Ein `StatusUpdate`, das angibt, ob die Verarbeitung erfolgreich war.
 2. Die Log-Datei des ili2gpkg-Prozesses, aufgeteilt in `fileStart` und einen oder mehrere `chunk`s.
 3. Bei Erfolg wird zusätzlich die Ausgabedatei der Operation gesendet, ebenfalls aufgeteilt in `fileStart` und `chunk`s. Bei `OPERATION_VALIDATE` wird das `XTF_LOG_FILE` auch im Fehlerfall gesendet, da es die gemeldeten Validierungsfehler enthält.
+
+## Ilivalidator service
+
+Der `IlivalidatorService` kapselt das Kommandozeilen-Tool `ilivalidator`, das INTERLIS-Transferdateien gegen ihre Modelle validiert.
+Der Service stellt eine einzige RPC-Methode bereit:
+
+```proto
+rpc Validate(stream ValidateRequest) returns (stream ValidateResponse)
+```
+
+### Ablauf einer Anfrage
+
+Die `ValidateRequest`-Nachrichten müssen in folgender Reihenfolge gesendet werden:
+
+1. Genau eine `ValidateRequestInfo` zuerst. Sie definiert die Validierungsoptionen.
+2. Für die Transferdatei:
+    1. Ein `IlivalidatorFileStart` mit dem Typ `TRANSFER_FILE`.
+    2. Direkt anschliessend der Dateiinhalt in einer oder mehreren `chunk`-Nachrichten.
+
+Aktuell wird genau eine Transferdatei (`.xtf`) erwartet.
+Modelldateien, `--modeldir` und Metaconfig-Dateien werden noch nicht unterstützt. Die Modelle werden aus den Modell-Repositories bzw. dem `ILI_CACHE` aufgelöst.
+
+Die maximale Grösse einer eingehenden Nachricht beträgt 100 MB.
+Falls eine Datei grösser ist, muss sie auf mehrere Chunks aufgeteilt werden.
+
+### Validierungsoptionen
+
+Die folgenden Optionen können in der `info`-Nachricht gesetzt und werden als Kommandozeilen-Argumente an `ilivalidator` weitergegeben:
+
+| Option | ilivalidator-Argument |
+| --- | --- |
+| `forceTypeValidation` | `--forceTypeValidation` |
+| `disableAreaValidation` | `--disableAreaValidation` |
+| `disableConstraintValidation` | `--disableConstraintValidation` |
+| `allObjectsAccessible` | `--allObjectsAccessible` |
+| `multiplicityOff` | `--multiplicityOff` |
+| `skipPolygonBuilding` | `--skipPolygonBuilding` |
+
+### Ablauf der Antwort
+
+Nachdem der Anfrage-Stream abgeschlossen ist, werden die Daten validiert.
+Nach der Verarbeitung antwortet der Server mit `ValidateResponse`-Nachrichten in folgender Reihenfolge:
+
+1. Ein `StatusUpdate`, das angibt, ob die Validierung erfolgreich war (keine Validierungsfehler).
+2. Die Text-Logdatei (`--log`) des ilivalidator-Prozesses, aufgeteilt in `fileStart` und einen oder mehrere `chunk`s.
+3. Die XTF-Logdatei (`--xtflog`) mit den strukturierten Validierungsergebnissen, ebenfalls aufgeteilt in `fileStart` und `chunk`s.
+
+Beide Logdateien werden immer zurückgegeben, auch im Fehlerfall, da sie die eigentlichen Validierungsergebnisse enthalten.
 
 ## Testen mit grpcurl
 

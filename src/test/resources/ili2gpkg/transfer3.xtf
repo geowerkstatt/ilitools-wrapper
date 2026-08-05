@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ili:transfer xmlns:ili="http://www.interlis.ch/xtf/2.4/INTERLIS"
+  xmlns:geom="http://www.interlis.ch/geometry/1.0"
+  xmlns="http://www.interlis.ch/xtf/2.4/SimpleModel">
+  <ili:headersection>
+    <ili:models>
+      <ili:model>SimpleModel</ili:model>
+    </ili:models>
+    <ili:sender>ilitools-wrapper</ili:sender>
+  </ili:headersection>
+  <ili:datasection>
+    <Testdata ili:bid="e1e2e3e4-f5f6-4a7b-8c9d-0e1f2a3b4c5d">
+      <ClassA ili:tid="77777777-7777-4777-8777-777777777777">
+        <Name>Epsilon</Name>
+      </ClassA>
+      <ClassA ili:tid="88888888-8888-4888-8888-888888888888">
+        <Name>Zeta</Name>
+      </ClassA>
+      <Point ili:tid="99999999-9999-4999-8999-999999999999">
+        <Geometry>
+          <geom:coord>
+            <geom:c1>2660000.000</geom:c1>
+            <geom:c2>1190000.000</geom:c2>
+          </geom:coord>
+        </Geometry>
+      </Point>
+    </Testdata>
+  </ili:datasection>
+</ili:transfer>

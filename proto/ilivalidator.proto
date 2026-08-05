@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator";
+option java_outer_classname = "IlivalidatorProto";
+option csharp_namespace = "Geowerkstatt.IlitoolsWrapperApi.Ilivalidator";
+
+package ilitoolswrapper.ilivalidator;
+
+import "common.proto";
+
+service IlivalidatorService {
+  rpc Validate(stream ValidateRequest) returns (stream ValidateResponse) {}
+}
+
+enum IlivalidatorFileType {
+  TRANSFER_FILE = 0;
+  LOG_FILE = 1;
+  XTF_LOG_FILE = 2;
+}
+
+message IlivalidatorFileStart {
+  IlivalidatorFileType type = 1;
+}
+
+message ValidateRequestInfo {
+  bool forceTypeValidation = 1;
+  bool disableAreaValidation = 2;
+  bool disableConstraintValidation = 3;
+  bool allObjectsAccessible = 4;
+  bool multiplicityOff = 5;
+  bool skipPolygonBuilding = 6;
+}
+
+message ValidateRequest {
+  oneof payload {
+    ValidateRequestInfo info = 1;
+    IlivalidatorFileStart fileStart = 2;
+    bytes chunk = 3;
+  }
+}
+
+message ValidateResponse {
+  oneof payload {
+    ilitoolswrapper.common.StatusUpdate status = 1;
+    IlivalidatorFileStart fileStart = 2;
+    bytes chunk = 3;
+  }
+}

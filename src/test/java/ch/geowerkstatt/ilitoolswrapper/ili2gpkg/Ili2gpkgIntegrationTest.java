@@ -1,6 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
-import ch.geowerkstatt.ilitoolswrapper.IlitoolsWrapperServer;
+import ch.geowerkstatt.ilitoolswrapper.IlitoolsIntegrationTestBase;
+import ch.geowerkstatt.ilitoolswrapper.IntegrationTestSupport;
 import ch.geowerkstatt.ilitoolswrapper.files.FilesystemFileManager;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
@@ -11,14 +12,10 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgServiceGrpc;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsProcessRunner;
 import com.google.protobuf.ByteString;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
+import io.grpc.BindableService;
 import io.grpc.StatusException;
 import io.grpc.stub.BlockingClientCall;
-import org.jspecify.annotations.NonNull;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.w3c.dom.Attr;
@@ -32,11 +29,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -49,48 +43,21 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 10, unit = TimeUnit.SECONDS)
-public final class Ili2gpkgIntegrationTest {
+public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
     private record Response(boolean success, String log, Path outputFilePath) { }
 
     private static final int PORT = 5678;
     private static final Path OUTPUT_DIR = Path.of("test-out", "ili2gpkg");
     private static final String DATASET_NAME = "TestDataset";
     private static final String MODEL_NAME = "SimpleModel";
-    private static IlitoolsWrapperServer server;
-    private static ManagedChannel channel;
 
-    @BeforeAll
-    static void setup() throws IOException {
-        var fileManager = new FilesystemFileManager();
-        var ilitoolsRunner = new IlitoolsProcessRunner();
-        var ili2gpkgService = new Ili2gpkgService(fileManager, ilitoolsRunner);
-        server = new IlitoolsWrapperServer(PORT, ili2gpkgService);
-        server.start();
-
-        channel = ManagedChannelBuilder
-                .forAddress("localhost", PORT)
-                .usePlaintext()
-                .build();
-        if (!Files.exists(OUTPUT_DIR)) {
-            Files.createDirectories(OUTPUT_DIR);
-        } else {
-            // Delete files in the output directory before running tests
-            Files.walkFileTree(OUTPUT_DIR, new SimpleFileVisitor<>() {
-                @Override
-                @NonNull
-                public FileVisitResult visitFile(@NonNull Path file, @NonNull BasicFileAttributes attrs) throws IOException {
-                    Files.delete(file);
-                    return super.visitFile(file, attrs);
-                }
-            });
-        }
+    public Ili2gpkgIntegrationTest() {
+        super(PORT, OUTPUT_DIR);
     }
 
-    @AfterAll
-    @Timeout(value = 10, unit = TimeUnit.SECONDS)
-    static void teardown() throws InterruptedException {
-        channel.shutdownNow();
-        server.stop();
+    @Override
+    protected BindableService createService() {
+        return new Ili2gpkgService(new FilesystemFileManager(), new IlitoolsProcessRunner());
     }
 
     @Test
@@ -165,6 +132,42 @@ public final class Ili2gpkgIntegrationTest {
     }
 
     @Test
+    public void testImportWithMultipleTransferFiles() throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        call.write(info(ConvertOperation.OPERATION_IMPORT, info -> info.setDataset(DATASET_NAME)));
+        writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/schema.gpkg");
+        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer.xtf");
+        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer2.xtf");
+        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer3.xtf");
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_import_multiple.gpkg");
+        assertTrue(response.success, "Import failed. Log:\n" + response.log);
+        assertNotEquals("", response.log, "Log is empty");
+
+        try (var connection = new GpkgConnection(response.outputFilePath)) {
+            connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
+            connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
+
+            connection.assertData("classa", "T_Id", List.of(
+                    Map.of("T_Ili_Tid", "11111111-1111-4111-8111-111111111111", "aname", "Alpha"),
+                    Map.of("T_Ili_Tid", "22222222-2222-4222-8222-222222222222", "aname", "Beta"),
+                    Map.of("T_Ili_Tid", "44444444-4444-4444-8444-444444444444", "aname", "Gamma"),
+                    Map.of("T_Ili_Tid", "55555555-5555-4555-8555-555555555555", "aname", "Delta"),
+                    Map.of("T_Ili_Tid", "77777777-7777-4777-8777-777777777777", "aname", "Epsilon"),
+                    Map.of("T_Ili_Tid", "88888888-8888-4888-8888-888888888888", "aname", "Zeta")
+            ));
+            connection.assertData("apoint", "T_Id", List.of(
+                    Map.of("T_Ili_Tid", "33333333-3333-4333-8333-333333333333"),
+                    Map.of("T_Ili_Tid", "66666666-6666-4666-8666-666666666666"),
+                    Map.of("T_Ili_Tid", "99999999-9999-4999-8999-999999999999")
+            ));
+        }
+    }
+
+    @Test
     public void testImportFailsWithInvalidData() throws Exception {
         var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
         var call = client.convert();
@@ -193,7 +196,7 @@ public final class Ili2gpkgIntegrationTest {
         assertTrue(response.success, "Export failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
 
-        try (InputStream expectedStream = getResourceStream("ili2gpkg/expected/export.xtf");
+        try (InputStream expectedStream = IntegrationTestSupport.getResourceStream("ili2gpkg/expected/export.xtf");
              InputStream actualStream = Files.newInputStream(response.outputFilePath)) {
             assertEqualXtfFiles(expectedStream, actualStream);
         }
@@ -354,30 +357,16 @@ public final class Ili2gpkgIntegrationTest {
             BlockingClientCall<ConvertRequest, ConvertResponse> call,
             Ili2gpkgFileType fileType,
             String resourcePath) throws StatusException, InterruptedException, IOException {
-        call.write(ConvertRequest.newBuilder()
-                .setFileStart(Ili2gpkgFileStart.newBuilder()
-                        .setType(fileType))
-                .build());
-
-        try (InputStream stream = getResourceStream(resourcePath)) {
-            // send in small chunks to test file streaming
-            byte[] buffer = new byte[32 * 1024];
-            int bytesRead;
-            while ((bytesRead = stream.read(buffer)) > 0) {
-                call.write(ConvertRequest.newBuilder()
-                        .setChunk(ByteString.copyFrom(buffer, 0, bytesRead))
-                        .build());
-            }
-        }
-    }
-
-    private static InputStream getResourceStream(String resourcePath) throws IOException {
-        ClassLoader classLoader = Ili2gpkgIntegrationTest.class.getClassLoader();
-        InputStream stream = classLoader.getResourceAsStream(resourcePath);
-        if (stream == null) {
-            throw new IOException("Resource not found: " + resourcePath);
-        }
-        return stream;
+        writeResourceFile(
+                call,
+                ConvertRequest.newBuilder()
+                        .setFileStart(Ili2gpkgFileStart.newBuilder()
+                                .setType(fileType))
+                        .build(),
+                chunk -> ConvertRequest.newBuilder()
+                        .setChunk(chunk)
+                        .build(),
+                resourcePath);
     }
 
     private void assertEqualXtfFiles(InputStream expectedStream, InputStream actualStream) throws IOException {

@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "ch.geowerkstatt.ilitoolswrapper.proto.common";
+option java_outer_classname = "CommonProto";
+option csharp_namespace = "Geowerkstatt.IlitoolsWrapperApi.Common";
+
+package ilitoolswrapper.common;
+
+message StatusUpdate {
+  bool success = 1;
+}
