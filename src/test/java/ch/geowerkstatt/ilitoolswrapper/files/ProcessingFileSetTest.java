@@ -70,12 +70,12 @@ public final class ProcessingFileSetTest {
     }
 
     @Test
-    void sizeCountsDistinctTypes() {
+    void sizeCountsAllFilesOfAnyType() {
         files.create(TestType.FIRST, "a", "xtf");
         files.create(TestType.FIRST, "b", "xtf");
         files.create(TestType.SECOND, "c", "xtf");
 
-        assertEquals(2, files.size());
+        assertEquals(3, files.size());
     }
 
     @Test

@@ -189,6 +189,22 @@ public final class IlivalidatorServiceTest {
     }
 
     @Test
+    void multipleTransferFilesAreRejected() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(chunk("first"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(chunk("second"));
+        requestObserver.onCompleted();
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run when more than one transfer file is sent.");
+    }
+
+    @Test
     void duplicateInfoIsRejected() {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 

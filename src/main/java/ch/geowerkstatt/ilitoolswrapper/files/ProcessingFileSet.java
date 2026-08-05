@@ -82,12 +82,12 @@ public final class ProcessingFileSet<F extends Enum<F>> {
     }
 
     /**
-     * Returns the number of distinct types that currently have at least one file.
+     * Returns the total number of files of any type.
      *
-     * @return the number of registered file types
+     * @return the total number of files of any type
      */
     public int size() {
-        return files.size();
+        return files.values().stream().mapToInt(List::size).sum();
     }
 
     /**

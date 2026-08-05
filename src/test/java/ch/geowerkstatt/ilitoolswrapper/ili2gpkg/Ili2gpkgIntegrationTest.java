@@ -132,6 +132,42 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
     }
 
     @Test
+    public void testImportWithMultipleTransferFiles() throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        call.write(info(ConvertOperation.OPERATION_IMPORT, info -> info.setDataset(DATASET_NAME)));
+        writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/schema.gpkg");
+        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer.xtf");
+        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer2.xtf");
+        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer3.xtf");
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_import_multiple.gpkg");
+        assertTrue(response.success, "Import failed. Log:\n" + response.log);
+        assertNotEquals("", response.log, "Log is empty");
+
+        try (var connection = new GpkgConnection(response.outputFilePath)) {
+            connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
+            connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
+
+            connection.assertData("classa", "T_Id", List.of(
+                    Map.of("T_Ili_Tid", "11111111-1111-4111-8111-111111111111", "aname", "Alpha"),
+                    Map.of("T_Ili_Tid", "22222222-2222-4222-8222-222222222222", "aname", "Beta"),
+                    Map.of("T_Ili_Tid", "44444444-4444-4444-8444-444444444444", "aname", "Gamma"),
+                    Map.of("T_Ili_Tid", "55555555-5555-4555-8555-555555555555", "aname", "Delta"),
+                    Map.of("T_Ili_Tid", "77777777-7777-4777-8777-777777777777", "aname", "Epsilon"),
+                    Map.of("T_Ili_Tid", "88888888-8888-4888-8888-888888888888", "aname", "Zeta")
+            ));
+            connection.assertData("apoint", "T_Id", List.of(
+                    Map.of("T_Ili_Tid", "33333333-3333-4333-8333-333333333333"),
+                    Map.of("T_Ili_Tid", "66666666-6666-4666-8666-666666666666"),
+                    Map.of("T_Ili_Tid", "99999999-9999-4999-8999-999999999999")
+            ));
+        }
+    }
+
+    @Test
     public void testImportFailsWithInvalidData() throws Exception {
         var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
         var call = client.convert();
