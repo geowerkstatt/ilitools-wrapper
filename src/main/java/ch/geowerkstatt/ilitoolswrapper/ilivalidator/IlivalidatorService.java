@@ -4,6 +4,8 @@ import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFileSet;
 import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheck;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.ModelDirValidator;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
 import ch.geowerkstatt.ilitoolswrapper.proto.common.StatusUpdate;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileType;
@@ -24,24 +26,31 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class IlivalidatorService extends IlivalidatorServiceGrpc.IlivalidatorServiceImplBase implements ServiceHealthCheck {
+    // %ITF_DIR is the directory of the transfer file, which is the session directory of the request.
+    private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%ITF_DIR");
+
     private static final Logger LOGGER = Logger.getLogger(IlivalidatorService.class.getName());
     private final FileManager fileManager;
     private final IlitoolsRunner ilitoolsRunner;
+    private final ModelDirValidator modelDirValidator;
 
     /**
      * Creates a new {@link IlivalidatorService} with the specified file manager and tool runner.
      *
      * @param fileManager the FileManager to use for managing temporary files
      * @param ilitoolsRunner the IlitoolsRunner to use for running the ilivalidator tool
+     * @param privateNetworkPolicy whether model repository URLs may resolve into non-public address ranges
      */
-    public IlivalidatorService(FileManager fileManager, IlitoolsRunner ilitoolsRunner) {
+    public IlivalidatorService(FileManager fileManager, IlitoolsRunner ilitoolsRunner, PrivateNetworkPolicy privateNetworkPolicy) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
+        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy);
     }
 
     @Override
@@ -74,6 +83,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         private final ProcessingFileSet<IlivalidatorFileType> files = new ProcessingFileSet<>(fileManager);
         private @Nullable ProcessingFile currentFile;
         private @Nullable ValidateRequestInfo info;
+        private String modelDirArgument = "";
 
         ValidateObserver(StreamObserver<ValidateResponse> responseObserver) {
             this.responseObserver = responseObserver;
@@ -96,6 +106,16 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             if (this.info != null) {
                 LOGGER.warning("Duplicate info message received.");
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription("Duplicate info message sent."));
+                return;
+            }
+
+            // Rejected here rather than during argument mapping, so that no file is received for a request that cannot run.
+            try {
+                modelDirArgument = modelDirValidator.validateAndJoin(info.getModelDirsList());
+                ModelDirValidator.validateMetaConfig(info.getMetaConfig());
+            } catch (IllegalArgumentException e) {
+                LOGGER.warning("Rejected model repository options: " + e.getMessage());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
                 return;
             }
 
@@ -224,6 +244,9 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             addFlag(args, "--allObjectsAccessible", requestInfo.getAllObjectsAccessible());
             addFlag(args, "--multiplicityOff", requestInfo.getMultiplicityOff());
             addFlag(args, "--skipPolygonBuilding", requestInfo.getSkipPolygonBuilding());
+
+            addArgument(args, "--modeldir", modelDirArgument);
+            addArgument(args, "--metaConfig", requestInfo.getMetaConfig());
 
             args.add(transferFile.get().filePath().toAbsolutePath().toString());
             return Optional.of(args);

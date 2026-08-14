@@ -4,6 +4,8 @@ import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFileSet;
 import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheck;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.ModelDirValidator;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
@@ -24,27 +26,35 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceImplBase implements ServiceHealthCheck {
+    // Setting --modeldir replaces the tool default entirely, so %ILI_FROM_DB has to stay available for
+    // operations that read the model from the GeoPackage itself.
+    private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%XTF_DIR", "%ILI_FROM_DB");
+
     private record ProcessingArguments(Ili2gpkgFileType outputFileType, boolean returnOutputOnError, List<String> arguments) { }
 
     private static final Logger LOGGER = Logger.getLogger(Ili2gpkgService.class.getName());
     private final FileManager fileManager;
     private final IlitoolsRunner ilitoolsRunner;
+    private final ModelDirValidator modelDirValidator;
 
     /**
      * Creates a new {@link Ili2gpkgService} with the specified file manager and tool runner.
      *
      * @param fileManager the FileManager to use for managing temporary files
      * @param ilitoolsRunner the IlitoolsRunner to use for running the ili2gpkg tool
+     * @param privateNetworkPolicy whether model repository URLs may resolve into non-public address ranges
      */
-    public Ili2gpkgService(FileManager fileManager, IlitoolsRunner ilitoolsRunner) {
+    public Ili2gpkgService(FileManager fileManager, IlitoolsRunner ilitoolsRunner, PrivateNetworkPolicy privateNetworkPolicy) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
+        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy);
     }
 
     @Override
@@ -77,6 +87,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         private final ProcessingFileSet<Ili2gpkgFileType> files = new ProcessingFileSet<>(fileManager);
         private @Nullable ProcessingFile currentFile;
         private @Nullable ConvertRequestInfo info;
+        private String modelDirArgument = "";
 
         ConvertObserver(StreamObserver<ConvertResponse> responseObserver) {
             this.responseObserver = responseObserver;
@@ -99,6 +110,16 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             if (this.info != null) {
                 LOGGER.warning("Duplicate info message received.");
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription("Duplicate info message sent."));
+                return;
+            }
+
+            // Rejected here rather than during argument mapping, so that no file is received for a request that cannot run.
+            try {
+                modelDirArgument = modelDirValidator.validateAndJoin(info.getModelDirsList());
+                ModelDirValidator.validateMetaConfig(info.getMetaConfig());
+            } catch (IllegalArgumentException e) {
+                LOGGER.warning("Rejected model repository options: " + e.getMessage());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
                 return;
             }
 
@@ -263,6 +284,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
             addArgument(args, "--dbfile", dbFile.filePath().toAbsolutePath().toString());
             addArgument(args, "--models", String.join(";", info.getModelsList()));
+            addArgument(args, "--modeldir", modelDirArgument);
+            addArgument(args, "--metaConfig", info.getMetaConfig());
             addArgument(args, "--defaultSrsCode", info.getDefaultSrsCode() > 0 ? Integer.toString(info.getDefaultSrsCode()) : null);
             addArgument(args, "--dataset", info.getDataset());
 

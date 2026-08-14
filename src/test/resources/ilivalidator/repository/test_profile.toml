@@ -1,0 +1,4 @@
+# Validation profile of the test repository. Disabling the constraint validation is observable in the
+# integration test: the transfer file that violates NameMinLength validates successfully with this profile.
+[ch.ehi.ilivalidator]
+disableConstraintValidation=true

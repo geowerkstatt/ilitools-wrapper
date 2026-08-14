@@ -45,6 +45,8 @@ message ConvertRequestInfo {
   bool importTid = 9;
   bool strokeArcs = 10;
   string dataset = 11;
+  repeated string modelDirs = 12;
+  string metaConfig = 13;
 }
 
 message ConvertRequest {

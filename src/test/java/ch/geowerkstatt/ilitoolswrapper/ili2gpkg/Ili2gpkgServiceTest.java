@@ -3,6 +3,7 @@ package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 import ch.geowerkstatt.ilitoolswrapper.RecordingStreamObserver;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryFileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryProcessingFile;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
@@ -37,7 +38,8 @@ public final class Ili2gpkgServiceTest {
     void setUp() {
         fileManager = new InMemoryFileManager();
         ilitoolsRunner = new IlitoolsRunnerMock();
-        service = new Ili2gpkgService(fileManager, ilitoolsRunner);
+        // Private networks are allowed so that the unit tests never depend on name resolution.
+        service = new Ili2gpkgService(fileManager, ilitoolsRunner, PrivateNetworkPolicy.ALLOW);
         responseObserver = new RecordingStreamObserver<>();
     }
 
@@ -180,6 +182,8 @@ public final class Ili2gpkgServiceTest {
         assertFalse(args.contains("--skipGeometryErrors"));
         assertFalse(args.contains("--importTid"));
         assertFalse(args.contains("--strokeArcs"));
+        assertFalse(args.contains("--modeldir"), "Without model dirs the tool default must stay in effect.");
+        assertFalse(args.contains("--metaConfig"));
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
@@ -207,6 +211,79 @@ public final class Ili2gpkgServiceTest {
         assertFalse(args.contains("--disableValidation"));
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE);
+    }
+
+    @Test
+    void convertPassesModelRepositoryOptionsAsArguments() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_SCHEMA_IMPORT)
+                        .addModelDirs("%ILI_FROM_DB")
+                        .addModelDirs("%XTF_DIR")
+                        .addModelDirs("https://models.interlis.ch/")
+                        .setMetaConfig("ilidata:DEFAULT"))
+                .build());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+
+        List<String> args = arguments.args();
+        assertArgumentWithValue(args, "--modeldir", "%ILI_FROM_DB;%XTF_DIR;https://models.interlis.ch/");
+        assertArgumentWithValue(args, "--metaConfig", "ilidata:DEFAULT");
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+    }
+
+    @Test
+    void invalidModelDirIsRejectedBeforeAnyFileIsReceived() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_SCHEMA_IMPORT)
+                        .addModelDirs("/etc/models"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected request.");
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
+    }
+
+    @Test
+    void placeholderOfOtherToolIsRejected() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_SCHEMA_IMPORT)
+                        .addModelDirs("%ITF_DIR"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
+    }
+
+    @Test
+    void metaConfigFilePathIsRejected() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_SCHEMA_IMPORT)
+                        .setMetaConfig("profile.toml"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
     }
 
     public static Stream<Arguments> expectedFileTypeProvider() {

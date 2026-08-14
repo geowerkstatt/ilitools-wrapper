@@ -23,6 +23,34 @@ Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Dock
 | `ILI2GPKG_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ili2gpkg Tools |
 | `ILIVALIDATOR_HOME` | Aus Dockerfile oder Gradle `run` Task | Verzeichnis der ilivalidator Installation |
 | `ILIVALIDATOR_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ilivalidator Tools |
+| `MODELDIR_ALLOW_PRIVATE_NETWORKS` | `false` | Erlaubt `modelDirs`-URLs, die in nicht öffentliche Adressbereiche auflösen (siehe [Modell-Repositories und Profile](#modell-repositories-und-profile)) |
+
+## Modell-Repositories und Profile
+
+Beide Services nehmen in der `info`-Nachricht zwei optionale Felder, mit denen die Auflösung der INTERLIS-Modelle und der Validierungs-Profile gesteuert wird. Die Werte werden unverändert an das Tool weitergegeben:
+
+| Feld | Tool-Argument | Beschreibung |
+| --- | --- | --- |
+| `modelDirs` | `--modeldir` | Geordnete Liste von Modell-Repositories, in Listenreihenfolge mit `;` zusammengefügt |
+| `metaConfig` | `--metaConfig` | Meta-Konfiguration in der Form `ilidata:<DatasetId>`, vom Tool über die `modelDirs` aufgelöst |
+
+Ohne Angabe gilt das Default-Verhalten der Tools: Die Modelle werden über die eingebauten Repositories bzw. den `ILI_CACHE` aufgelöst.
+
+Ein gesetztes `modelDirs` **ersetzt den Default des Tools vollständig**. Wer die Standard-Repositories weiterhin braucht, gibt sie explizit als Eintrag an (z.B. `https://models.interlis.ch/`).
+
+Erlaubte Einträge:
+
+- `http(s)`-URLs auf INTERLIS-Modell-Repositories
+- die Platzhalter des jeweiligen Tools, die erst das Tool selbst expandiert:
+    - `%ITF_DIR` (`IlivalidatorService`): das Verzeichnis der Transferdatei, also das Session-Verzeichnis des Aufrufs. Dort liegt heute nur die Transferdatei selbst, der Eintrag wird also erst nützlich, wenn Modell-Dateien oder ein Repository-Archiv mitgesendet werden können.
+    - `%XTF_DIR` (`Ili2gpkgService`): dasselbe Verzeichnis. Hier lassen sich schon heute Dateien vom Typ `MODEL_FILE` mitsenden, die das Tool darüber findet.
+    - `%ILI_FROM_DB` (`Ili2gpkgService`): das im GeoPackage selbst abgelegte Modell. Nötig, sobald `modelDirs` gesetzt ist, weil dieser Eintrag sonst mit dem Tool-Default verloren geht.
+
+Alles andere wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen oder ein Tool-Prozess gestartet wird: lokale Pfade, andere Schemas wie `file:`, URLs mit Zugangsdaten, Einträge mit dem Trennzeichen `;` sowie der Platzhalter des jeweils anderen Tools. URLs, die in nicht öffentliche Adressbereiche auflösen (privat, Loopback, Link-Local, CGNAT, IPv6-ULA), werden ebenfalls abgelehnt; für Testumgebungen lässt sich das mit `MODELDIR_ALLOW_PRIVATE_NETWORKS=true` abschalten.
+
+Ein URL-Eintrag ist damit per Definition ein öffentlich erreichbares Repository. Nicht publizierte, kundenspezifische Repository-Inhalte können noch nicht im Request mitgesendet werden.
+
+`metaConfig` unterstützt bewusst nur die Form `ilidata:<DatasetId>`: Profile sind über die `ilidata.xml` des Repositorys indexiert, eine Datei-Form wird nicht angeboten.
 
 ## Ili2gpkg service
 
@@ -57,6 +85,8 @@ Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet u
 | `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
 | `OPERATION_VALIDATE` | Validiert die Daten in einem GeoPackage | `DB_FILE` (`.gpkg`) | `XTF_LOG_FILE` (`.xtf`) |
 
+Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig` zur Verfügung, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
+
 ### Ablauf der Antwort
 
 Nachdem der Anfrage-Stream abgeschlossen ist, werden die Daten verarbeitet.
@@ -85,7 +115,8 @@ Die `ValidateRequest`-Nachrichten müssen in folgender Reihenfolge gesendet werd
     2. Direkt anschliessend der Dateiinhalt in einer oder mehreren `chunk`-Nachrichten.
 
 Aktuell wird genau eine Transferdatei (`.xtf`) erwartet.
-Modelldateien, `--modeldir` und Metaconfig-Dateien werden noch nicht unterstützt. Die Modelle werden aus den Modell-Repositories bzw. dem `ILI_CACHE` aufgelöst.
+Vom Lieferanten mitgelieferte Modelldateien können noch nicht als eigener Dateityp gesendet werden.
+Die Modell-Repositories und das Validierungs-Profil werden über `modelDirs` und `metaConfig` gesteuert, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
 
 Die maximale Grösse einer eingehenden Nachricht beträgt 100 MB.
 Falls eine Datei grösser ist, muss sie auf mehrere Chunks aufgeteilt werden.
@@ -102,6 +133,8 @@ Die folgenden Optionen können in der `info`-Nachricht gesetzt und werden als Ko
 | `allObjectsAccessible` | `--allObjectsAccessible` |
 | `multiplicityOff` | `--multiplicityOff` |
 | `skipPolygonBuilding` | `--skipPolygonBuilding` |
+
+Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
 
 ### Ablauf der Antwort
 

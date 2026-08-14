@@ -3,6 +3,7 @@ package ch.geowerkstatt.ilitoolswrapper.ilivalidator;
 import ch.geowerkstatt.ilitoolswrapper.IlitoolsIntegrationTestBase;
 import ch.geowerkstatt.ilitoolswrapper.IntegrationTestSupport;
 import ch.geowerkstatt.ilitoolswrapper.files.FilesystemFileManager;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorServiceGrpc;
@@ -26,6 +27,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -47,7 +49,8 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     protected BindableService createService() throws IOException {
         byte[] model = IntegrationTestSupport.getResourceBytes("ilivalidator/model.ili");
         var fileManager = new ModelSeedingFileManager(new FilesystemFileManager(), MODEL_FILE_NAME, model);
-        return new IlivalidatorService(fileManager, new IlitoolsProcessRunner());
+        // The repository of the meta config test is served from localhost, so non-public addresses must be allowed.
+        return new IlivalidatorService(fileManager, new IlitoolsProcessRunner(), PrivateNetworkPolicy.ALLOW);
     }
 
     @Test
@@ -82,6 +85,45 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
                 "Both logs should be returned even when validation fails.");
         assertTrue(result.log.contains("NameMinLength"), "Text log should mention the violated constraint. Log:\n" + result.log);
         assertXtfLog(result.xtfLogPath);
+    }
+
+    @Test
+    public void testValidateResolvesModelFromTransferFileDirectory() throws Exception {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        // %ITF_DIR replaces the tool default, so the model next to the transfer file is the only source left.
+        call.write(info(info -> info.addModelDirs("%ITF_DIR")));
+        writeResourceFile(call, "ilivalidator/transfer.xtf");
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "itf_dir_log.xtf");
+        assertTrue(result.success, "Validation with %ITF_DIR as only model dir should have succeeded. Log:\n" + result.log);
+        assertTrue(result.log.contains("validation done"), "Text log should report a successful validation. Log:\n" + result.log);
+    }
+
+    @Test
+    public void testValidateAppliesProfileFromModelRepository() throws Exception {
+        try (LocalRepositoryServer repository = LocalRepositoryServer.start()) {
+            var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+            var call = client.validate();
+
+            call.write(info(info -> info
+                    .addModelDirs("%ITF_DIR")
+                    .addModelDirs(repository.baseUrl())
+                    .setMetaConfig("ilidata:TEST-PROFILE")));
+            writeResourceFile(call, "ilivalidator/transfer_invalid.xtf");
+            call.halfClose();
+
+            ValidationResult result = readResponse(call, "profile_log.xtf");
+            assertTrue(result.success, "The profile disables constraint validation, so the invalid data should pass. Log:\n" + result.log);
+            assertFalse(result.log.contains("NameMinLength"), "The disabled constraint should not be reported. Log:\n" + result.log);
+            assertXtfLog(result.xtfLogPath);
+
+            List<String> requestedPaths = repository.requestedPaths();
+            assertTrue(requestedPaths.contains("/ilidata.xml"), "The tool should have read the repository index. Requested: " + requestedPaths);
+            assertTrue(requestedPaths.contains("/test_profile.toml"), "The tool should have read the profile of the repository. Requested: " + requestedPaths);
+        }
     }
 
     private static ValidationResult readResponse(
@@ -136,6 +178,15 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     private static ValidateRequest info() {
         return ValidateRequest.newBuilder()
                 .setInfo(ValidateRequestInfo.newBuilder())
+                .build();
+    }
+
+    private static ValidateRequest info(Consumer<ValidateRequestInfo.Builder> configureInfo) {
+        ValidateRequestInfo.Builder infoBuilder = ValidateRequestInfo.newBuilder();
+        configureInfo.accept(infoBuilder);
+
+        return ValidateRequest.newBuilder()
+                .setInfo(infoBuilder)
                 .build();
     }
 
