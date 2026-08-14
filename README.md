@@ -38,6 +38,8 @@ Ohne Angabe gilt das Default-Verhalten der Tools: Die Modelle werden über die e
 
 Ein gesetztes `modelDirs` **ersetzt den Default des Tools vollständig**. Wer die Standard-Repositories weiterhin braucht, gibt sie explizit als Eintrag an (z.B. `https://models.interlis.ch/`).
 
+**Die Reihenfolge ist die Auflösungsreihenfolge.** Das Tool durchsucht die Einträge von links nach rechts und nimmt den ersten Treffer. Ein früherer Eintrag verdrängt damit gleichnamige Modelle eines späteren, auch bei identischer Modell-Version und ohne Warnung; im Log steht die Herkunft (`lookup model <X> in repository <...>`). Einträge, deren Inhalt nicht aus einer geprüften Quelle stammt, gehören deshalb an das Ende der Liste, sonst können sie die Modelle der geprüften Repositories ersetzen.
+
 Erlaubte Einträge:
 
 - `http(s)`-URLs auf INTERLIS-Modell-Repositories
@@ -57,6 +59,8 @@ Ein URL-Eintrag ist damit per Definition ein öffentlich erreichbares Repository
 Ein kundenspezifisches Repository muss nicht per URL erreichbar sein. Beide Services nehmen den Dateityp `REPOSITORY_ARCHIVE` an, ein ZIP des Repository-Verzeichnisses. Der Wrapper entpackt es ins Session-Verzeichnis des Aufrufs, neben die Transferdatei, und behält die Verzeichnisstruktur des Archivs. Der Repository-Index (`ilidata.xml`, `ilisite.xml`, `ilimodels.xml`) gehört deshalb auf die oberste Ebene des Archivs.
 
 Referenziert wird das entpackte Repository über den Tool-Platzhalter und nicht über ein zusätzliches Feld: `%ITF_DIR` beim `IlivalidatorService`, `%XTF_DIR` beim `Ili2gpkgService`. Ein Profil daraus löst `metaConfig = ilidata:<DatasetId>` über die mitgesendete `ilidata.xml` auf, analog zum bisherigen ilicop-Verhalten mit gemountetem Repository.
+
+**Der Inhalt des Archivs wird unverändert benutzt.** Beim Entpacken prüft der Wrapper Pfade und Grössen, nie die Bedeutung der Dateien. Ein Archiv kann deshalb Modelle definieren, über eine eigene `ilidata.xml` die konfigurierte Profil-Id neu belegen und damit zum Beispiel Prüfungen abschalten, und über eine `ilisite.xml` auf weitere Repositories verketten, die das Tool dann ebenfalls abfragt. Wer das Archiv zusammenstellt, bestimmt also mit, was das Validierungsresultat bedeutet. Inhalte aus nicht geprüfter Quelle, etwa aus einem Upload, gehören nicht in dieses Archiv; für einzelne mitgelieferte Modell-Dateien wäre ein eigener Dateityp der geeignete Weg, den der Contract noch nicht hat.
 
 Pro Aufruf ist höchstens ein Archiv erlaubt. Beim Entpacken gilt:
 
