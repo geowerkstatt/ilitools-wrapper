@@ -13,12 +13,14 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateResponse;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsProcessRunner;
 import com.google.protobuf.ByteString;
 import io.grpc.BindableService;
+import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.stub.BlockingClientCall;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -26,11 +28,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 30, unit = TimeUnit.SECONDS)
@@ -173,6 +179,91 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         }
 
         return new ValidationResult(success, logBuilder.toString(), xtfLogPath, returnedFiles);
+    }
+
+    @Test
+    public void testValidateAppliesProfileFromInlineRepository() throws Exception {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        // The repository travels in the request instead of being fetched, %ITF_DIR points at the session directory
+        // the wrapper extracts it into. This is the parity case for the environments that mount a local repository.
+        call.write(info(info -> info
+                .addModelDirs("%ITF_DIR")
+                .setMetaConfig("ilidata:TEST-PROFILE")));
+        writeResourceFile(call, "ilivalidator/transfer_invalid.xtf");
+        writeRepositoryArchive(call, repositoryArchive());
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "inline_profile_log.xtf");
+        assertTrue(result.success, "The profile of the inline repository disables constraint validation. Log:\n" + result.log);
+        assertFalse(result.log.contains("NameMinLength"), "The disabled constraint should not be reported. Log:\n" + result.log);
+        assertXtfLog(result.xtfLogPath);
+    }
+
+    @Test
+    public void testValidateRejectsArchiveWithPathTraversal() throws Exception {
+        long sessionsBefore = countProcessingSessions();
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        call.write(info(info -> info.addModelDirs("%ITF_DIR")));
+        writeResourceFile(call, "ilivalidator/transfer.xtf");
+        writeRepositoryArchive(call, archiveOf(Map.of("../escaped.xml", "gotcha")));
+        call.halfClose();
+
+        StatusException exception = assertThrows(StatusException.class, () -> readResponse(call, "traversal_log.xtf"));
+        assertEquals(Status.Code.INVALID_ARGUMENT, exception.getStatus().getCode(), "A traversing entry must be rejected as an invalid argument.");
+        assertEquals(sessionsBefore, countProcessingSessions(), "The session directory must be removed after a rejected archive.");
+    }
+
+    private static byte[] repositoryArchive() throws IOException {
+        return archiveOf(Map.of(
+                "ilidata.xml", resourceAsString("ilivalidator/repository/ilidata.xml"),
+                "test_profile.toml", resourceAsString("ilivalidator/repository/test_profile.toml")));
+    }
+
+    private static String resourceAsString(String resourcePath) throws IOException {
+        return new String(IntegrationTestSupport.getResourceBytes(resourcePath), StandardCharsets.UTF_8);
+    }
+
+    private static byte[] archiveOf(Map<String, String> entries) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (ZipOutputStream zipStream = new ZipOutputStream(buffer)) {
+            for (Map.Entry<String, String> entry : entries.entrySet()) {
+                zipStream.putNextEntry(new ZipEntry(entry.getKey()));
+                zipStream.write(entry.getValue().getBytes(StandardCharsets.UTF_8));
+                zipStream.closeEntry();
+            }
+        }
+        return buffer.toByteArray();
+    }
+
+    private static void writeRepositoryArchive(
+            BlockingClientCall<ValidateRequest, ValidateResponse> call,
+            byte[] archive) throws StatusException, InterruptedException {
+        call.write(ValidateRequest.newBuilder()
+                .setFileStart(IlivalidatorFileStart.newBuilder()
+                        .setType(IlivalidatorFileType.REPOSITORY_ARCHIVE))
+                .build());
+        call.write(ValidateRequest.newBuilder()
+                .setChunk(ByteString.copyFrom(archive))
+                .build());
+    }
+
+    /**
+     * Counts the session directories below the processing directory, which defaults to {@code processing} when
+     * {@code PROCESSING_DIR} is not set.
+     */
+    private static long countProcessingSessions() throws IOException {
+        Path processingDir = Path.of("processing");
+        if (!Files.isDirectory(processingDir)) {
+            return 0;
+        }
+
+        try (var sessions = Files.list(processingDir)) {
+            return sessions.count();
+        }
     }
 
     private static ValidateRequest info() {

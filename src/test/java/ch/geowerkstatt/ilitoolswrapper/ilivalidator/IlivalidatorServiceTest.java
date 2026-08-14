@@ -209,6 +209,37 @@ public final class IlivalidatorServiceTest {
     }
 
     @Test
+    void repositoryArchiveIsReceivedAsZipFile() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REPOSITORY_ARCHIVE));
+        requestObserver.onNext(chunk("PK"));
+
+        assertNull(responseObserver.error());
+        InMemoryProcessingFile created = fileManager.lastCreatedFile();
+        assertTrue(created.filePath().toString().endsWith(".zip"), "The archive should be stored as a zip file, but was " + created.filePath());
+    }
+
+    @Test
+    void multipleRepositoryArchivesAreRejected() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REPOSITORY_ARCHIVE));
+        requestObserver.onNext(chunk("first"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REPOSITORY_ARCHIVE));
+        requestObserver.onNext(chunk("second"));
+        requestObserver.onCompleted();
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run when more than one archive is sent.");
+    }
+
+    @Test
     void duplicateInfoIsRejected() {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 

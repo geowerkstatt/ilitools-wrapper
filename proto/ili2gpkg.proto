@@ -19,6 +19,7 @@ enum Ili2gpkgFileType {
   TRANSFER_FILE = 2;
   LOG_FILE = 3;
   XTF_LOG_FILE = 4;
+  REPOSITORY_ARCHIVE = 5;
 }
 
 message Ili2gpkgFileStart {

@@ -6,6 +6,7 @@ import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFileSet;
 import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheck;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.ModelDirValidator;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryArchiveExtractor;
 import ch.geowerkstatt.ilitoolswrapper.proto.common.StatusUpdate;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileType;
@@ -36,6 +37,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%ITF_DIR");
 
     private static final Logger LOGGER = Logger.getLogger(IlivalidatorService.class.getName());
+    private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
     private final FileManager fileManager;
     private final IlitoolsRunner ilitoolsRunner;
     private final ModelDirValidator modelDirValidator;
@@ -132,6 +134,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             IlivalidatorFileType type = fileStart.getType();
             String extension = switch (type) {
                 case TRANSFER_FILE -> "xtf";
+                case REPOSITORY_ARCHIVE -> "zip";
                 default -> null;
             };
             if (extension == null) {
@@ -193,6 +196,10 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 return;
             }
 
+            if (!extractRepositoryArchive()) {
+                return;
+            }
+
             try {
                 LOGGER.fine("Validating data with ilivalidator.");
                 Optional<List<String>> parsedArguments = validateRequestToArguments();
@@ -221,6 +228,23 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         private void cancelWithError(Status status) {
             responseObserver.onError(status.asRuntimeException());
             files.deleteAll();
+        }
+
+        // Runs after the received files are closed and before the log files exist, so a colliding archive entry can
+        // only hit a file the caller sent itself. Returns false when the request was cancelled.
+        private boolean extractRepositoryArchive() {
+            try {
+                REPOSITORY_ARCHIVE_EXTRACTOR.extractReceived(files.getAll(IlivalidatorFileType.REPOSITORY_ARCHIVE).orElse(List.of()));
+                return true;
+            } catch (IllegalArgumentException e) {
+                LOGGER.warning("Rejected repository archive: " + e.getMessage());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
+                return false;
+            } catch (IOException e) {
+                LOGGER.log(Level.WARNING, "Failed to extract the repository archive.", e);
+                cancelWithError(Status.ABORTED.withDescription("Failed to extract the repository archive."));
+                return false;
+            }
         }
 
         private Optional<List<String>> validateRequestToArguments() {

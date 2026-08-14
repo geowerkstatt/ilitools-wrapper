@@ -6,6 +6,7 @@ import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFileSet;
 import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheck;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.ModelDirValidator;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryArchiveExtractor;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
@@ -40,6 +41,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     private record ProcessingArguments(Ili2gpkgFileType outputFileType, boolean returnOutputOnError, List<String> arguments) { }
 
     private static final Logger LOGGER = Logger.getLogger(Ili2gpkgService.class.getName());
+    private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
     private final FileManager fileManager;
     private final IlitoolsRunner ilitoolsRunner;
     private final ModelDirValidator modelDirValidator;
@@ -138,6 +140,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 case DB_FILE -> "gpkg";
                 case MODEL_FILE -> "ili";
                 case TRANSFER_FILE -> "xtf";
+                case REPOSITORY_ARCHIVE -> "zip";
                 default -> null;
             };
             if (extension == null) {
@@ -199,6 +202,10 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 return;
             }
 
+            if (!extractRepositoryArchive()) {
+                return;
+            }
+
             try {
                 LOGGER.fine("Processing data with ili2gpkg.");
                 Optional<ProcessingArguments> parsedArguments = convertRequestToArguments();
@@ -228,6 +235,23 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         private void cancelWithError(Status status) {
             responseObserver.onError(status.asRuntimeException());
             files.deleteAll();
+        }
+
+        // Runs after the received files are closed and before the output files exist, so a colliding archive entry
+        // can only hit a file the caller sent itself. Returns false when the request was cancelled.
+        private boolean extractRepositoryArchive() {
+            try {
+                REPOSITORY_ARCHIVE_EXTRACTOR.extractReceived(files.getAll(Ili2gpkgFileType.REPOSITORY_ARCHIVE).orElse(List.of()));
+                return true;
+            } catch (IllegalArgumentException e) {
+                LOGGER.warning("Rejected repository archive: " + e.getMessage());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
+                return false;
+            } catch (IOException e) {
+                LOGGER.log(Level.WARNING, "Failed to extract the repository archive.", e);
+                cancelWithError(Status.ABORTED.withDescription("Failed to extract the repository archive."));
+                return false;
+            }
         }
 
         private Optional<ProcessingArguments> convertRequestToArguments() {
