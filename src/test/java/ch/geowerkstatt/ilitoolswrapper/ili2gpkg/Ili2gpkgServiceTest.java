@@ -317,6 +317,37 @@ public final class Ili2gpkgServiceTest {
     }
 
     @Test
+    void operationWithoutItsRequiredFilesIsRejected() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        // Import needs at least one transfer file next to the database file.
+        requestObserver.onNext(info(ConvertOperation.OPERATION_IMPORT));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run when a required file is missing.");
+    }
+
+    @Test
+    void schemaImportWithMultipleModelFilesIsRejected() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(info(ConvertOperation.OPERATION_SCHEMA_IMPORT));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("first"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("second"));
+        requestObserver.onCompleted();
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for an ambiguous schema import.");
+    }
+
+    @Test
     void chunkBeforeInfoIsRejected() {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 

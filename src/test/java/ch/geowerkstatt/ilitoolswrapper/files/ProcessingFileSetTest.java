@@ -7,6 +7,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class ProcessingFileSetTest {
@@ -52,12 +53,20 @@ public final class ProcessingFileSetTest {
         ProcessingFile first = files.create(TestType.FIRST, "a", "xtf");
         ProcessingFile second = files.create(TestType.FIRST, "b", "xtf");
 
-        assertEquals(List.of(first, second), files.getAll(TestType.FIRST).orElseThrow());
+        assertEquals(List.of(first, second), files.getAll(TestType.FIRST));
     }
 
     @Test
-    void getAllReturnsEmptyWhenTypeAbsent() {
+    void getAllReturnsEmptyListWhenTypeAbsent() {
         assertTrue(files.getAll(TestType.FIRST).isEmpty());
+    }
+
+    @Test
+    void getAllReturnsACopyTheCallerCannotModify() {
+        ProcessingFile file = files.create(TestType.FIRST, "a", "xtf");
+
+        assertThrows(UnsupportedOperationException.class, () -> files.getAll(TestType.FIRST).add(file));
+        assertEquals(1, files.getAll(TestType.FIRST).size());
     }
 
     @Test

@@ -49,7 +49,7 @@ public final class ProcessingFileSet<F extends Enum<F>> {
 
     /**
      * Returns the single file registered for the given type, or an empty optional if there is no file or more
-     * than one file of that type.
+     * than one file of that type. Callers that have to tell those two cases apart use {@link #getAll} instead.
      *
      * @param type the type to look up
      * @return the single file of that type, if exactly one exists
@@ -63,13 +63,14 @@ public final class ProcessingFileSet<F extends Enum<F>> {
     }
 
     /**
-     * Returns all files registered for the given type, or an empty optional if no file of that type exists.
+     * Returns all files registered for the given type, in the order they were created.
      *
      * @param type the type to look up
-     * @return the files of that type, if any exist
+     * @return the files of that type, an empty list if there is none
      */
-    public Optional<List<ProcessingFile>> getAll(F type) {
-        return Optional.ofNullable(files.get(type));
+    public List<ProcessingFile> getAll(F type) {
+        List<ProcessingFile> filesOfType = files.get(type);
+        return filesOfType == null ? List.of() : List.copyOf(filesOfType);
     }
 
     /**

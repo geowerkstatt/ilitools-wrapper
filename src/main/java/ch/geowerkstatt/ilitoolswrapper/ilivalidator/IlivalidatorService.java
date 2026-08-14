@@ -234,7 +234,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         // only hit a file the caller sent itself. Returns false when the request was cancelled.
         private boolean extractRepositoryArchive() {
             try {
-                REPOSITORY_ARCHIVE_EXTRACTOR.extractReceived(files.getAll(IlivalidatorFileType.REPOSITORY_ARCHIVE).orElse(List.of()));
+                REPOSITORY_ARCHIVE_EXTRACTOR.extractReceived(files.getAll(IlivalidatorFileType.REPOSITORY_ARCHIVE));
                 return true;
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Rejected repository archive: " + e.getMessage());
@@ -247,12 +247,13 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             }
         }
 
+        // Exactly one transfer file is what makes a validate request runnable, so the optional of the file set carries
+        // straight through to the optional of the arguments.
         private Optional<List<String>> validateRequestToArguments() {
-            Optional<ProcessingFile> transferFile = files.getSingle(IlivalidatorFileType.TRANSFER_FILE);
-            if (transferFile.isEmpty()) {
-                return Optional.empty();
-            }
+            return files.getSingle(IlivalidatorFileType.TRANSFER_FILE).map(this::buildValidateArguments);
+        }
 
+        private List<String> buildValidateArguments(ProcessingFile transferFile) {
             List<String> args = new ArrayList<>();
 
             ProcessingFile logFile = files.create(IlivalidatorFileType.LOG_FILE, "log", "txt");
@@ -272,8 +273,8 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             addArgument(args, "--modeldir", modelDirArgument);
             addArgument(args, "--metaConfig", requestInfo.getMetaConfig());
 
-            args.add(transferFile.get().filePath().toAbsolutePath().toString());
-            return Optional.of(args);
+            args.add(transferFile.filePath().toAbsolutePath().toString());
+            return args;
         }
 
         private static void addFlag(List<String> args, String flag, boolean enabled) {

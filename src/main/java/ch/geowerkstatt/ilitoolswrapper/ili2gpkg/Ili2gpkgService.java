@@ -241,7 +241,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         // can only hit a file the caller sent itself. Returns false when the request was cancelled.
         private boolean extractRepositoryArchive() {
             try {
-                REPOSITORY_ARCHIVE_EXTRACTOR.extractReceived(files.getAll(Ili2gpkgFileType.REPOSITORY_ARCHIVE).orElse(List.of()));
+                REPOSITORY_ARCHIVE_EXTRACTOR.extractReceived(files.getAll(Ili2gpkgFileType.REPOSITORY_ARCHIVE));
                 return true;
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Rejected repository archive: " + e.getMessage());
@@ -263,13 +263,19 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             switch (Objects.requireNonNull(info).getOperation()) {
                 case OPERATION_SCHEMA_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
-                    subjects = files.getSingle(Ili2gpkgFileType.MODEL_FILE).map(List::of).orElse(null);
+                    subjects = files.getAll(Ili2gpkgFileType.MODEL_FILE);
+                    if (subjects.size() != 1) {
+                        return Optional.empty();
+                    }
                     dbFile = files.create(Ili2gpkgFileType.DB_FILE, "output", "gpkg");
                     args.add("--schemaimport");
                 }
                 case OPERATION_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
-                    subjects = files.getAll(Ili2gpkgFileType.TRANSFER_FILE).orElse(null);
+                    subjects = files.getAll(Ili2gpkgFileType.TRANSFER_FILE);
+                    if (subjects.isEmpty()) {
+                        return Optional.empty();
+                    }
                     dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--import");
                 }
@@ -281,7 +287,10 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
                 case OPERATION_UPDATE -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
-                    subjects = files.getAll(Ili2gpkgFileType.TRANSFER_FILE).orElse(null);
+                    subjects = files.getAll(Ili2gpkgFileType.TRANSFER_FILE);
+                    if (subjects.isEmpty()) {
+                        return Optional.empty();
+                    }
                     dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--update");
                 }
@@ -302,7 +311,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 default -> throw new IllegalArgumentException("Unsupported operation: " + info.getOperation());
             }
 
-            if (subjects == null || dbFile == null) {
+            if (dbFile == null) {
                 return Optional.empty();
             }
 
