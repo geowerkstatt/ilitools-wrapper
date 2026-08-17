@@ -27,8 +27,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
@@ -203,7 +205,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
 
     @Test
     public void testValidateRejectsArchiveWithPathTraversal() throws Exception {
-        long sessionsBefore = countProcessingSessions();
+        Set<String> sessionsBefore = processingSessions();
         var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
         var call = client.validate();
 
@@ -214,7 +216,10 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
 
         StatusException exception = assertThrows(StatusException.class, () -> readResponse(call, "traversal_log.xtf"));
         assertEquals(Status.Code.INVALID_ARGUMENT, exception.getStatus().getCode(), "A traversing entry must be rejected as an invalid argument.");
-        assertEquals(sessionsBefore, countProcessingSessions(), "The session directory must be removed after a rejected archive.");
+
+        Set<String> leftOver = new HashSet<>(processingSessions());
+        leftOver.removeAll(sessionsBefore);
+        assertTrue(leftOver.isEmpty(), "The session directory must be removed after a rejected archive, but found " + leftOver);
     }
 
     private static byte[] repositoryArchive() throws IOException {
@@ -252,17 +257,20 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     }
 
     /**
-     * Counts the session directories below the processing directory, which defaults to {@code processing} when
-     * {@code PROCESSING_DIR} is not set.
+     * Returns the names of the session directories below the processing directory, which defaults to
+     * {@code processing} when {@code PROCESSING_DIR} is not set. Compared as two snapshots, so a session of an
+     * earlier run does not disturb the assertion. It would disturb it if tests ever ran in parallel, because a
+     * session of another test could be alive during the second snapshot; this project runs them sequentially
+     * (no junit-platform.properties, no maxParallelForks).
      */
-    private static long countProcessingSessions() throws IOException {
+    private static Set<String> processingSessions() throws IOException {
         Path processingDir = Path.of("processing");
         if (!Files.isDirectory(processingDir)) {
-            return 0;
+            return Set.of();
         }
 
         try (var sessions = Files.list(processingDir)) {
-            return sessions.count();
+            return Set.copyOf(sessions.map(path -> path.getFileName().toString()).toList());
         }
     }
 
