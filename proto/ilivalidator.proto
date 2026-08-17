@@ -17,6 +17,7 @@ enum IlivalidatorFileType {
   TRANSFER_FILE = 0;
   LOG_FILE = 1;
   XTF_LOG_FILE = 2;
+  REPOSITORY_ARCHIVE = 3;
 }
 
 message IlivalidatorFileStart {
@@ -30,6 +31,8 @@ message ValidateRequestInfo {
   bool allObjectsAccessible = 4;
   bool multiplicityOff = 5;
   bool skipPolygonBuilding = 6;
+  repeated string modelDirs = 7;
+  string metaConfig = 8;
 }
 
 message ValidateRequest {

@@ -4,6 +4,9 @@ import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFileSet;
 import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheck;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.ModelDirValidator;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryArchiveExtractor;
 import ch.geowerkstatt.ilitoolswrapper.proto.common.StatusUpdate;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileType;
@@ -24,24 +27,32 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class IlivalidatorService extends IlivalidatorServiceGrpc.IlivalidatorServiceImplBase implements ServiceHealthCheck {
+    // %ITF_DIR is the directory of the transfer file, which is the session directory of the request.
+    private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%ITF_DIR");
+
     private static final Logger LOGGER = Logger.getLogger(IlivalidatorService.class.getName());
+    private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
     private final FileManager fileManager;
     private final IlitoolsRunner ilitoolsRunner;
+    private final ModelDirValidator modelDirValidator;
 
     /**
      * Creates a new {@link IlivalidatorService} with the specified file manager and tool runner.
      *
      * @param fileManager the FileManager to use for managing temporary files
      * @param ilitoolsRunner the IlitoolsRunner to use for running the ilivalidator tool
+     * @param privateNetworkPolicy whether model repository URLs may resolve into non-public address ranges
      */
-    public IlivalidatorService(FileManager fileManager, IlitoolsRunner ilitoolsRunner) {
+    public IlivalidatorService(FileManager fileManager, IlitoolsRunner ilitoolsRunner, PrivateNetworkPolicy privateNetworkPolicy) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
+        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy);
     }
 
     @Override
@@ -74,6 +85,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         private final ProcessingFileSet<IlivalidatorFileType> files = new ProcessingFileSet<>(fileManager);
         private @Nullable ProcessingFile currentFile;
         private @Nullable ValidateRequestInfo info;
+        private String modelDirArgument = "";
 
         ValidateObserver(StreamObserver<ValidateResponse> responseObserver) {
             this.responseObserver = responseObserver;
@@ -99,6 +111,16 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 return;
             }
 
+            // Rejected here rather than during argument mapping, so that no file is received for a request that cannot run.
+            try {
+                modelDirArgument = modelDirValidator.validateAndJoin(info.getModelDirsList());
+                ModelDirValidator.validateMetaConfig(info.getMetaConfig());
+            } catch (IllegalArgumentException e) {
+                LOGGER.warning("Rejected model repository options: " + e.getMessage());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
+                return;
+            }
+
             this.info = info;
             LOGGER.fine("Received info: " + info);
         }
@@ -112,6 +134,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             IlivalidatorFileType type = fileStart.getType();
             String extension = switch (type) {
                 case TRANSFER_FILE -> "xtf";
+                case REPOSITORY_ARCHIVE -> "zip";
                 default -> null;
             };
             if (extension == null) {
@@ -173,6 +196,10 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 return;
             }
 
+            if (!extractRepositoryArchive()) {
+                return;
+            }
+
             try {
                 LOGGER.fine("Validating data with ilivalidator.");
                 Optional<List<String>> parsedArguments = validateRequestToArguments();
@@ -203,12 +230,30 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             files.deleteAll();
         }
 
-        private Optional<List<String>> validateRequestToArguments() {
-            Optional<ProcessingFile> transferFile = files.getSingle(IlivalidatorFileType.TRANSFER_FILE);
-            if (transferFile.isEmpty()) {
-                return Optional.empty();
+        // Runs after the received files are closed and before the log files exist, so a colliding archive entry can
+        // only hit a file the caller sent itself. Returns false when the request was cancelled.
+        private boolean extractRepositoryArchive() {
+            try {
+                REPOSITORY_ARCHIVE_EXTRACTOR.extractReceived(files.getAll(IlivalidatorFileType.REPOSITORY_ARCHIVE));
+                return true;
+            } catch (IllegalArgumentException e) {
+                LOGGER.warning("Rejected repository archive: " + e.getMessage());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
+                return false;
+            } catch (IOException e) {
+                LOGGER.log(Level.WARNING, "Failed to extract the repository archive.", e);
+                cancelWithError(Status.ABORTED.withDescription("Failed to extract the repository archive."));
+                return false;
             }
+        }
 
+        // Exactly one transfer file is what makes a validate request runnable, so the optional of the file set carries
+        // straight through to the optional of the arguments.
+        private Optional<List<String>> validateRequestToArguments() {
+            return files.getSingle(IlivalidatorFileType.TRANSFER_FILE).map(this::buildValidateArguments);
+        }
+
+        private List<String> buildValidateArguments(ProcessingFile transferFile) {
             List<String> args = new ArrayList<>();
 
             ProcessingFile logFile = files.create(IlivalidatorFileType.LOG_FILE, "log", "txt");
@@ -225,8 +270,11 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             addFlag(args, "--multiplicityOff", requestInfo.getMultiplicityOff());
             addFlag(args, "--skipPolygonBuilding", requestInfo.getSkipPolygonBuilding());
 
-            args.add(transferFile.get().filePath().toAbsolutePath().toString());
-            return Optional.of(args);
+            addArgument(args, "--modeldir", modelDirArgument);
+            addArgument(args, "--metaConfig", requestInfo.getMetaConfig());
+
+            args.add(transferFile.filePath().toAbsolutePath().toString());
+            return args;
         }
 
         private static void addFlag(List<String> args, String flag, boolean enabled) {

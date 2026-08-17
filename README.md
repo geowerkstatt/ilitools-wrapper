@@ -23,6 +23,58 @@ Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Dock
 | `ILI2GPKG_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ili2gpkg Tools |
 | `ILIVALIDATOR_HOME` | Aus Dockerfile oder Gradle `run` Task | Verzeichnis der ilivalidator Installation |
 | `ILIVALIDATOR_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ilivalidator Tools |
+| `MODELDIR_ALLOW_PRIVATE_NETWORKS` | `false` | Erlaubt `modelDirs`-URLs, die in nicht öffentliche Adressbereiche auflösen (siehe [Modell-Repositories und Profile](#modell-repositories-und-profile)) |
+
+## Modell-Repositories und Profile
+
+Beide Services nehmen in der `info`-Nachricht zwei optionale Felder, mit denen die Auflösung der INTERLIS-Modelle und der Validierungs-Profile gesteuert wird. Die Werte werden unverändert an das Tool weitergegeben:
+
+| Feld | Tool-Argument | Beschreibung |
+| --- | --- | --- |
+| `modelDirs` | `--modeldir` | Geordnete Liste von Modell-Repositories, in Listenreihenfolge mit `;` zusammengefügt |
+| `metaConfig` | `--metaConfig` | Meta-Konfiguration in der Form `ilidata:<DatasetId>`, vom Tool über die `modelDirs` aufgelöst |
+
+Ohne Angabe gilt das Default-Verhalten der Tools: Die Modelle werden über die eingebauten Repositories bzw. den `ILI_CACHE` aufgelöst.
+
+Ein gesetztes `modelDirs` **ersetzt den Default des Tools vollständig**. Wer die Standard-Repositories weiterhin braucht, gibt sie explizit als Eintrag an (z.B. `https://models.interlis.ch/`).
+
+**Die Reihenfolge ist die Auflösungsreihenfolge.** Das Tool durchsucht die Einträge von links nach rechts und nimmt den ersten Treffer. Ein früherer Eintrag verdrängt damit gleichnamige Modelle eines späteren, auch bei identischer Modell-Version und ohne Warnung; im Log steht die Herkunft (`lookup model <X> in repository <...>`). Einträge, deren Inhalt nicht aus einer geprüften Quelle stammt, gehören deshalb an das Ende der Liste, sonst können sie die Modelle der geprüften Repositories ersetzen.
+
+Erlaubte Einträge:
+
+- `http(s)`-URLs auf INTERLIS-Modell-Repositories
+- die Platzhalter des jeweiligen Tools, die erst das Tool selbst expandiert:
+    - `%ITF_DIR` (`IlivalidatorService`): das Verzeichnis der Transferdatei, also das Session-Verzeichnis des Aufrufs. Dort liegt die Transferdatei und, falls mitgesendet, das entpackte Repository-Archiv (siehe [Repository im Request mitsenden](#repository-im-request-mitsenden)).
+    - `%XTF_DIR` (`Ili2gpkgService`): dasselbe Verzeichnis. Dort liegen zusätzlich mitgesendete Dateien vom Typ `MODEL_FILE`, die das Tool darüber findet.
+    - `%ILI_FROM_DB` (`Ili2gpkgService`): das im GeoPackage selbst abgelegte Modell. Nötig, sobald `modelDirs` gesetzt ist, weil dieser Eintrag sonst mit dem Tool-Default verloren geht.
+
+Alles andere wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen oder ein Tool-Prozess gestartet wird: lokale Pfade, andere Schemas wie `file:`, URLs mit Zugangsdaten, Einträge mit dem Trennzeichen `;` sowie der Platzhalter des jeweils anderen Tools. URLs, die in nicht öffentliche Adressbereiche auflösen (privat, Loopback, Link-Local, CGNAT, IPv6-ULA), werden ebenfalls abgelehnt; für Testumgebungen lässt sich das mit `MODELDIR_ALLOW_PRIVATE_NETWORKS=true` abschalten.
+
+Ein URL-Eintrag ist damit per Definition ein öffentlich erreichbares Repository. Nicht publizierte Repositories werden stattdessen im Request mitgesendet.
+
+`metaConfig` unterstützt bewusst nur die Form `ilidata:<DatasetId>`: Profile sind über die `ilidata.xml` des Repositorys indexiert, eine Datei-Form wird nicht angeboten.
+
+### Repository im Request mitsenden
+
+Ein kundenspezifisches Repository muss nicht per URL erreichbar sein. Beide Services nehmen den Dateityp `REPOSITORY_ARCHIVE` an, ein ZIP des Repository-Verzeichnisses. Der Wrapper entpackt es ins Session-Verzeichnis des Aufrufs, neben die Transferdatei, und behält die Verzeichnisstruktur des Archivs. Der Repository-Index (`ilidata.xml`, `ilisite.xml`, `ilimodels.xml`) gehört deshalb auf die oberste Ebene des Archivs.
+
+Referenziert wird das entpackte Repository über den Tool-Platzhalter und nicht über ein zusätzliches Feld: `%ITF_DIR` beim `IlivalidatorService`, `%XTF_DIR` beim `Ili2gpkgService`. Ein Profil daraus löst `metaConfig = ilidata:<DatasetId>` über die mitgesendete `ilidata.xml` auf, analog zum bisherigen ilicop-Verhalten mit gemountetem Repository.
+
+**Der Inhalt des Archivs wird unverändert benutzt.** Beim Entpacken prüft der Wrapper Pfade und Grössen, nie die Bedeutung der Dateien. Ein Archiv kann deshalb Modelle definieren, über eine eigene `ilidata.xml` die konfigurierte Profil-Id neu belegen und damit zum Beispiel Prüfungen abschalten, und über eine `ilisite.xml` auf weitere Repositories verketten, die das Tool dann ebenfalls abfragt. Wer das Archiv zusammenstellt, bestimmt also mit, was das Validierungsresultat bedeutet. Inhalte aus nicht geprüfter Quelle, etwa aus einem Upload, gehören nicht in dieses Archiv; für einzelne mitgelieferte Modell-Dateien wäre ein eigener Dateityp der geeignete Weg, den der Contract noch nicht hat.
+
+Pro Aufruf ist höchstens ein Archiv erlaubt. Beim Entpacken gilt:
+
+| Fall | Verhalten |
+| --- | --- |
+| Eintragspfad zeigt aus dem Session-Verzeichnis heraus (`..` oder absolut) | `INVALID_ARGUMENT` |
+| Eintrag würde eine bereits empfangene Datei ersetzen | `INVALID_ARGUMENT` |
+| mehr als 2000 Einträge | `INVALID_ARGUMENT` |
+| mehr als 64 MB entpackt | `INVALID_ARGUMENT` |
+| kein lesbares ZIP | `INVALID_ARGUMENT` |
+
+Abgelehnt wird immer, bevor ein Tool-Prozess startet, und das Session-Verzeichnis wird auch im Fehlerfall gelöscht.
+
+Die Inline-Route ist für kompakte Repositories gedacht; die Limits markieren die Eignungsgrenze. Grosse, insbesondere katalog-lastige Repositories gehören publiziert und per URL referenziert, dort lädt das Tool nur die benötigten Dateien und der `ILI_CACHE` greift.
 
 ## Ili2gpkg service
 
@@ -57,6 +109,8 @@ Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet u
 | `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
 | `OPERATION_VALIDATE` | Validiert die Daten in einem GeoPackage | `DB_FILE` (`.gpkg`) | `XTF_LOG_FILE` (`.xtf`) |
 
+Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig` sowie der optionale Dateityp `REPOSITORY_ARCHIVE` zur Verfügung, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
+
 ### Ablauf der Antwort
 
 Nachdem der Anfrage-Stream abgeschlossen ist, werden die Daten verarbeitet.
@@ -84,8 +138,9 @@ Die `ValidateRequest`-Nachrichten müssen in folgender Reihenfolge gesendet werd
     1. Ein `IlivalidatorFileStart` mit dem Typ `TRANSFER_FILE`.
     2. Direkt anschliessend der Dateiinhalt in einer oder mehreren `chunk`-Nachrichten.
 
-Aktuell wird genau eine Transferdatei (`.xtf`) erwartet.
-Modelldateien, `--modeldir` und Metaconfig-Dateien werden noch nicht unterstützt. Die Modelle werden aus den Modell-Repositories bzw. dem `ILI_CACHE` aufgelöst.
+Erwartet wird genau eine Transferdatei (`.xtf`), optional zusätzlich ein `REPOSITORY_ARCHIVE`.
+Vom Lieferanten mitgelieferte einzelne Modelldateien können noch nicht als eigener Dateityp gesendet werden; sie lassen sich aber im Repository-Archiv mitgeben.
+Die Modell-Repositories und das Validierungs-Profil werden über `modelDirs` und `metaConfig` gesteuert, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
 
 Die maximale Grösse einer eingehenden Nachricht beträgt 100 MB.
 Falls eine Datei grösser ist, muss sie auf mehrere Chunks aufgeteilt werden.
@@ -102,6 +157,8 @@ Die folgenden Optionen können in der `info`-Nachricht gesetzt und werden als Ko
 | `allObjectsAccessible` | `--allObjectsAccessible` |
 | `multiplicityOff` | `--multiplicityOff` |
 | `skipPolygonBuilding` | `--skipPolygonBuilding` |
+
+Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
 
 ### Ablauf der Antwort
 

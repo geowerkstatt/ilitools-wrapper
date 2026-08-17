@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Repository index of the test model repository, structured like the productive customer repositories. -->
+<TRANSFER xmlns="http://www.interlis.ch/INTERLIS2.3">
+  <HEADERSECTION SENDER="ilitools-wrapper" VERSION="2.3">
+    <MODELS>
+      <MODEL NAME="DatasetIdx16" VERSION="2018-11-21" URI="mailto:ce@eisenhutinformatik.ch"></MODEL>
+    </MODELS>
+  </HEADERSECTION>
+  <DATASECTION>
+    <DatasetIdx16.DataIndex BID="b0">
+      <DatasetIdx16.DataIndex.DatasetMetadata TID="1">
+        <id>TEST-PROFILE</id>
+        <version>1.0.0</version>
+        <publishingDate>2026-08-12</publishingDate>
+        <owner>mailto:support@geowerkstatt.ch</owner>
+        <title>
+          <DatasetIdx16.MultilingualText>
+            <LocalisedText>
+              <DatasetIdx16.LocalisedText>
+                <Text>Test profile that disables constraint validation</Text>
+              </DatasetIdx16.LocalisedText>
+            </LocalisedText>
+          </DatasetIdx16.MultilingualText>
+        </title>
+        <categories>
+          <DatasetIdx16.Code_>
+            <value>http://codes.interlis.ch/type/metaconfig</value>
+          </DatasetIdx16.Code_>
+        </categories>
+        <files>
+          <DatasetIdx16.DataFile>
+            <fileFormat>application/toml</fileFormat>
+            <file>
+              <DatasetIdx16.File>
+                <path>test_profile.toml</path>
+              </DatasetIdx16.File>
+            </file>
+          </DatasetIdx16.DataFile>
+        </files>
+      </DatasetIdx16.DataIndex.DatasetMetadata>
+    </DatasetIdx16.DataIndex>
+  </DATASECTION>
+</TRANSFER>

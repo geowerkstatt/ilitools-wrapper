@@ -3,6 +3,7 @@ package ch.geowerkstatt.ilitoolswrapper.ilivalidator;
 import ch.geowerkstatt.ilitoolswrapper.RecordingStreamObserver;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryFileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryProcessingFile;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateRequest;
@@ -32,7 +33,8 @@ public final class IlivalidatorServiceTest {
     void setUp() {
         fileManager = new InMemoryFileManager();
         ilitoolsRunner = new IlitoolsRunnerMock();
-        service = new IlivalidatorService(fileManager, ilitoolsRunner);
+        // Private networks are allowed so that the unit tests never depend on name resolution.
+        service = new IlivalidatorService(fileManager, ilitoolsRunner, PrivateNetworkPolicy.ALLOW);
         responseObserver = new RecordingStreamObserver<>();
     }
 
@@ -131,6 +133,8 @@ public final class IlivalidatorServiceTest {
         assertFalse(args.contains("--allObjectsAccessible"));
         assertFalse(args.contains("--multiplicityOff"));
         assertFalse(args.contains("--skipPolygonBuilding"));
+        assertFalse(args.contains("--modeldir"), "Without model dirs the tool default must stay in effect.");
+        assertFalse(args.contains("--metaConfig"));
 
         assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
     }
@@ -205,6 +209,37 @@ public final class IlivalidatorServiceTest {
     }
 
     @Test
+    void repositoryArchiveIsReceivedAsZipFile() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REPOSITORY_ARCHIVE));
+        requestObserver.onNext(chunk("PK"));
+
+        assertNull(responseObserver.error());
+        InMemoryProcessingFile created = fileManager.lastCreatedFile();
+        assertTrue(created.filePath().toString().endsWith(".zip"), "The archive should be stored as a zip file, but was " + created.filePath());
+    }
+
+    @Test
+    void multipleRepositoryArchivesAreRejected() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REPOSITORY_ARCHIVE));
+        requestObserver.onNext(chunk("first"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REPOSITORY_ARCHIVE));
+        requestObserver.onNext(chunk("second"));
+        requestObserver.onCompleted();
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run when more than one archive is sent.");
+    }
+
+    @Test
     void duplicateInfoIsRejected() {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
@@ -253,6 +288,76 @@ public final class IlivalidatorServiceTest {
     }
 
     @Test
+    void validatePassesModelRepositoryOptionsAsArguments() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .addModelDirs("%ITF_DIR")
+                        .addModelDirs("https://models.interlis.ch/")
+                        .setMetaConfig("ilidata:DEFAULT"))
+                .build());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(chunk("data"));
+        InMemoryProcessingFile transferFile = fileManager.lastCreatedFile();
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+
+        List<String> args = arguments.args();
+        assertArgumentWithValue(args, "--modeldir", "%ITF_DIR;https://models.interlis.ch/");
+        assertArgumentWithValue(args, "--metaConfig", "ilidata:DEFAULT");
+        assertEquals(transferFile.filePath().toAbsolutePath().toString(), args.getLast(), "The transfer file should stay the last, positional argument.");
+
+        assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
+    }
+
+    @Test
+    void invalidModelDirIsRejectedBeforeAnyFileIsReceived() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .addModelDirs("file:///etc/"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected request.");
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
+    }
+
+    @Test
+    void placeholderOfOtherToolIsRejected() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .addModelDirs("%XTF_DIR"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
+    }
+
+    @Test
+    void metaConfigFilePathIsRejected() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setMetaConfig("/repositories/profile.toml"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
+    }
+
+    @Test
     void returnsHealthyOnSuccess() {
         assertEquals(HealthCheckResponse.ServingStatus.SERVING, service.getHealthStatus());
 
@@ -290,6 +395,13 @@ public final class IlivalidatorServiceTest {
             assertEquals(expectedFiles[i], response.getFileStart().getType(), "Unexpected file type at index " + (i + 1));
             // the mocks do not provide any file content (chunks)
         }
+    }
+
+    private static void assertArgumentWithValue(List<String> args, String name, String value) {
+        int index = args.indexOf(name);
+        assertTrue(index >= 0, "Expected argument " + name + " to be present.");
+        assertTrue(index + 1 < args.size(), "Expected a value after " + name + ".");
+        assertEquals(value, args.get(index + 1), "Unexpected value for " + name + ".");
     }
 
     private static Status.Code statusCodeOf(Throwable error) {

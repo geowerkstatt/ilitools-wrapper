@@ -3,6 +3,7 @@ package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 import ch.geowerkstatt.ilitoolswrapper.IlitoolsIntegrationTestBase;
 import ch.geowerkstatt.ilitoolswrapper.IntegrationTestSupport;
 import ch.geowerkstatt.ilitoolswrapper.files.FilesystemFileManager;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
@@ -57,7 +58,8 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
 
     @Override
     protected BindableService createService() {
-        return new Ili2gpkgService(new FilesystemFileManager(), new IlitoolsProcessRunner());
+        // Private networks are allowed so that the tests stay independent of name resolution.
+        return new Ili2gpkgService(new FilesystemFileManager(), new IlitoolsProcessRunner(), PrivateNetworkPolicy.ALLOW);
     }
 
     @Test
@@ -195,6 +197,28 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         Response response = readResponse(call, Ili2gpkgFileType.TRANSFER_FILE, "data_export.xtf");
         assertTrue(response.success, "Export failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+
+        try (InputStream expectedStream = IntegrationTestSupport.getResourceStream("ili2gpkg/expected/export.xtf");
+             InputStream actualStream = Files.newInputStream(response.outputFilePath)) {
+            assertEqualXtfFiles(expectedStream, actualStream);
+        }
+    }
+
+    @Test
+    public void testExportWithModelDirPlaceholders() throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        // Setting model dirs replaces the tool default, so the model has to come from the database itself.
+        call.write(info(ConvertOperation.OPERATION_EXPORT, info -> info
+                .addModels(MODEL_NAME)
+                .addModelDirs("%ILI_FROM_DB")
+                .addModelDirs("%XTF_DIR")));
+        writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/data.gpkg");
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.TRANSFER_FILE, "data_export_modeldir.xtf");
+        assertTrue(response.success, "Export with model dir placeholders failed. Log:\n" + response.log);
 
         try (InputStream expectedStream = IntegrationTestSupport.getResourceStream("ili2gpkg/expected/export.xtf");
              InputStream actualStream = Files.newInputStream(response.outputFilePath)) {
