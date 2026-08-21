@@ -1,0 +1,23 @@
+TRANSFER SimpleModel1;
+
+!! Minimal INTERLIS 1 test model. Legacy syntax on purpose: it covers the
+!! "ITF with delivered INTERLIS 1 model" use case of geopilot#683.
+MODEL SimpleModel1
+
+  TOPIC TopicA =
+
+    TABLE TableA =
+      Name: TEXT*30;
+    NO IDENT
+    END TableA;
+
+  END TopicA.
+
+END SimpleModel1.
+
+FORMAT FREE;
+
+CODE
+  BLANK = DEFAULT, UNDEFINED = DEFAULT, CONTINUE = DEFAULT;
+  TID = ANY;
+END.

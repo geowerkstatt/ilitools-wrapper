@@ -47,18 +47,15 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
 
     private static final int PORT = 5679;
     private static final Path OUTPUT_DIR = Path.of("test-out", "ilivalidator");
-    private static final String MODEL_FILE_NAME = "SimpleModel";
 
     public IlivalidatorIntegrationTest() {
         super(PORT, OUTPUT_DIR);
     }
 
     @Override
-    protected BindableService createService() throws IOException {
-        byte[] model = IntegrationTestSupport.getResourceBytes("ilivalidator/model.ili");
-        var fileManager = new ModelSeedingFileManager(new FilesystemFileManager(), MODEL_FILE_NAME, model);
+    protected BindableService createService() {
         // The repository of the meta config test is served from localhost, so non-public addresses must be allowed.
-        return new IlivalidatorService(fileManager, new IlitoolsProcessRunner(), PrivateNetworkPolicy.ALLOW);
+        return new IlivalidatorService(new FilesystemFileManager(), new IlitoolsProcessRunner(), PrivateNetworkPolicy.ALLOW);
     }
 
     @Test
@@ -67,7 +64,8 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         var call = client.validate();
 
         call.write(info());
-        writeResourceFile(call, "ilivalidator/transfer.xtf");
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer.xtf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model.ili");
         call.halfClose();
 
         ValidationResult result = readResponse(call, "valid_log.xtf");
@@ -84,7 +82,8 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         var call = client.validate();
 
         call.write(info());
-        writeResourceFile(call, "ilivalidator/transfer_invalid.xtf");
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer_invalid.xtf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model.ili");
         call.halfClose();
 
         ValidationResult result = readResponse(call, "invalid_log.xtf");
@@ -100,14 +99,31 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
         var call = client.validate();
 
-        // %ITF_DIR replaces the tool default, so the model next to the transfer file is the only source left.
+        // %ITF_DIR replaces the tool default, so the delivered model next to the transfer file is the only source left.
         call.write(info(info -> info.addModelDirs("%ITF_DIR")));
-        writeResourceFile(call, "ilivalidator/transfer.xtf");
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer.xtf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model.ili");
         call.halfClose();
 
         ValidationResult result = readResponse(call, "itf_dir_log.xtf");
         assertTrue(result.success, "Validation with %ITF_DIR as only model dir should have succeeded. Log:\n" + result.log);
         assertTrue(result.log.contains("validation done"), "Text log should report a successful validation. Log:\n" + result.log);
+    }
+
+    @Test
+    public void testValidateFailsWithoutDeliveredModel() throws Exception {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        // The regression scenario of geopilot#683: %ITF_DIR is the only source and no model is delivered.
+        // The tool cannot resolve the model, which is a validation result, not an RPC error.
+        call.write(info(info -> info.addModelDirs("%ITF_DIR")));
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer.xtf");
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "missing_model_log.xtf");
+        assertFalse(result.success, "Validation should fail when the model cannot be resolved. Log:\n" + result.log);
+        assertTrue(result.log.contains("SimpleModel"), "Text log should name the unresolvable model. Log:\n" + result.log);
     }
 
     @Test
@@ -120,7 +136,8 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
                     .addModelDirs("%ITF_DIR")
                     .addModelDirs(repository.baseUrl())
                     .setMetaConfig("ilidata:TEST-PROFILE")));
-            writeResourceFile(call, "ilivalidator/transfer_invalid.xtf");
+            writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer_invalid.xtf");
+            writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model.ili");
             call.halfClose();
 
             ValidationResult result = readResponse(call, "profile_log.xtf");
@@ -193,7 +210,8 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         call.write(info(info -> info
                 .addModelDirs("%ITF_DIR")
                 .setMetaConfig("ilidata:TEST-PROFILE")));
-        writeResourceFile(call, "ilivalidator/transfer_invalid.xtf");
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer_invalid.xtf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model.ili");
         writeRepositoryArchive(call, repositoryArchive());
         call.halfClose();
 
@@ -204,13 +222,30 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     }
 
     @Test
+    public void testValidateItfAgainstDeliveredInterlis1Model() throws Exception {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        // The original use case of geopilot#683: an INTERLIS 1 delivery brings its own model. The wrapper stores
+        // the transfer file under an .xtf name; the tool picks its reader from the content, not the extension.
+        call.write(info(info -> info.addModelDirs("%ITF_DIR")));
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer_interlis1.itf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_interlis1.ili");
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "interlis1_log.xtf");
+        assertTrue(result.success, "The ITF should validate against the delivered INTERLIS 1 model. Log:\n" + result.log);
+        assertTrue(result.log.contains("validation done"), "Text log should report a successful validation. Log:\n" + result.log);
+    }
+
+    @Test
     public void testValidateRejectsArchiveWithPathTraversal() throws Exception {
         Set<String> sessionsBefore = processingSessions();
         var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
         var call = client.validate();
 
         call.write(info(info -> info.addModelDirs("%ITF_DIR")));
-        writeResourceFile(call, "ilivalidator/transfer.xtf");
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer.xtf");
         writeRepositoryArchive(call, archiveOf(Map.of("../escaped.xml", "gotcha")));
         call.halfClose();
 
@@ -291,12 +326,13 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
 
     private static void writeResourceFile(
             BlockingClientCall<ValidateRequest, ValidateResponse> call,
+            IlivalidatorFileType fileType,
             String resourcePath) throws StatusException, InterruptedException, IOException {
         writeResourceFile(
                 call,
                 ValidateRequest.newBuilder()
                         .setFileStart(IlivalidatorFileStart.newBuilder()
-                                .setType(IlivalidatorFileType.TRANSFER_FILE))
+                                .setType(fileType))
                         .build(),
                 chunk -> ValidateRequest.newBuilder()
                         .setChunk(chunk)

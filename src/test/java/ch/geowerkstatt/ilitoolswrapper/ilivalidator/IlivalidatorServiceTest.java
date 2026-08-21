@@ -240,6 +240,78 @@ public final class IlivalidatorServiceTest {
     }
 
     @Test
+    void modelFileIsReceivedAsIliFile() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("MODEL Example (en) = END Example."));
+
+        assertNull(responseObserver.error());
+        InMemoryProcessingFile created = fileManager.lastCreatedFile();
+        assertTrue(created.filePath().toString().endsWith(".ili"), "The model should be stored as an ili file, but was " + created.filePath());
+    }
+
+    @Test
+    void multipleModelFilesAreAccepted() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("first model"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("second model"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        assertNotNull(ilitoolsRunner.lastArguments(), "The runner should have been invoked.");
+        assertEquals(5, fileManager.createdFiles().size(), "File manager should create the transfer file, both model files and both log files");
+
+        assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
+    }
+
+    @Test
+    void modelFilesAreNotPassedAsArguments() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(chunk("data"));
+        InMemoryProcessingFile transferFile = fileManager.lastCreatedFile();
+        requestObserver.onNext(fileStart(IlivalidatorFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("model"));
+        InMemoryProcessingFile modelFile = fileManager.lastCreatedFile();
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+
+        List<String> args = arguments.args();
+        assertEquals(transferFile.filePath().toAbsolutePath().toString(), args.getLast(), "The transfer file should stay the last, positional argument.");
+        assertFalse(args.contains(modelFile.filePath().toAbsolutePath().toString()), "Model files work by lying in the session directory, not through arguments.");
+    }
+
+    @Test
+    void modelFileWithoutTransferFileIsRejected() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("model"));
+        requestObserver.onCompleted();
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        String description = Status.fromThrowable(responseObserver.error()).getDescription();
+        assertNotNull(description);
+        assertTrue(description.contains("transfer file"), "The request should fail on the missing transfer file, but was: " + description);
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run without a transfer file.");
+    }
+
+    @Test
     void duplicateInfoIsRejected() {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 

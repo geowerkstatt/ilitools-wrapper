@@ -135,6 +135,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             String extension = switch (type) {
                 case TRANSFER_FILE -> "xtf";
                 case REPOSITORY_ARCHIVE -> "zip";
+                case MODEL_FILE -> "ili";
                 default -> null;
             };
             if (extension == null) {

@@ -18,6 +18,7 @@ enum IlivalidatorFileType {
   LOG_FILE = 1;
   XTF_LOG_FILE = 2;
   REPOSITORY_ARCHIVE = 3;
+  MODEL_FILE = 4;
 }
 
 message IlivalidatorFileStart {
