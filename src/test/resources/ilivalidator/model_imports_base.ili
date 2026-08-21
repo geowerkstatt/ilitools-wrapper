@@ -1,0 +1,18 @@
+INTERLIS 2.4;
+
+MODEL MainModel
+  AT "mailto:info@geowerkstatt.ch"
+  VERSION "2026-08-21" =
+
+  IMPORTS BaseModel;
+
+  TOPIC TopicA =
+    OID AS INTERLIS.UUIDOID;
+
+    CLASS ClassA =
+      Name: MANDATORY BaseModel.ShortText;
+    END ClassA;
+
+  END TopicA;
+
+END MainModel.

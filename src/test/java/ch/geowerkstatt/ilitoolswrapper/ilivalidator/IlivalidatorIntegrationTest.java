@@ -108,6 +108,24 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     }
 
     @Test
+    public void testValidateResolvesImportBetweenDeliveredModels() throws Exception {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        // A delivered model may import another delivered model: all model files land in the same session
+        // directory, which the tool scans as one repository, so the import resolves without any remote repository.
+        call.write(info(info -> info.addModelDirs("%ITF_DIR")));
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer_imports_base.xtf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_imports_base.ili");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_base.ili");
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "imports_log.xtf");
+        assertTrue(result.success, "The import between the delivered models should resolve from the session directory. Log:\n" + result.log);
+        assertTrue(result.log.contains("validation done"), "Text log should report a successful validation. Log:\n" + result.log);
+    }
+
+    @Test
     public void testValidateFailsWithoutDeliveredModel() throws Exception {
         var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
         var call = client.validate();
