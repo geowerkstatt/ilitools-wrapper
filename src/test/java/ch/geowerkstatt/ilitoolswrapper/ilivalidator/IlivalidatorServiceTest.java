@@ -295,6 +295,43 @@ public final class IlivalidatorServiceTest {
     }
 
     @Test
+    void transferFileExtensionItfIsApplied() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE, "itf"));
+        requestObserver.onNext(chunk("SCNT"));
+
+        assertNull(responseObserver.error());
+        InMemoryProcessingFile created = fileManager.lastCreatedFile();
+        assertTrue(created.filePath().toString().endsWith(".itf"), "The transfer file should keep the declared itf extension, but was " + created.filePath());
+    }
+
+    @Test
+    void invalidTransferFileExtensionIsRejected() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE, "pdf"));
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected extension.");
+    }
+
+    @Test
+    void fileExtensionOnNonTransferFileIsRejected() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.MODEL_FILE, "itf"));
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created when the extension is set on a non transfer file.");
+    }
+
+    @Test
     void modelFileWithoutTransferFileIsRejected() {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
@@ -491,6 +528,14 @@ public final class IlivalidatorServiceTest {
         return ValidateRequest.newBuilder()
                 .setFileStart(IlivalidatorFileStart.newBuilder()
                         .setType(fileType))
+                .build();
+    }
+
+    private static ValidateRequest fileStart(IlivalidatorFileType fileType, String fileExtension) {
+        return ValidateRequest.newBuilder()
+                .setFileStart(IlivalidatorFileStart.newBuilder()
+                        .setType(fileType)
+                        .setFileExtension(fileExtension))
                 .build();
     }
 

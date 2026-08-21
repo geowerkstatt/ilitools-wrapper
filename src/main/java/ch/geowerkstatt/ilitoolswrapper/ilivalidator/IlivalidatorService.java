@@ -132,8 +132,24 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 return;
             }
             IlivalidatorFileType type = fileStart.getType();
+            String requestedExtension = fileStart.getFileExtension();
+            if (!requestedExtension.isEmpty()) {
+                // The tool derives its INTERLIS 1 semantics from the extension of the transfer file (measured:
+                // per-table TIDs of an ITF are rejected under an .xtf name), so the client may declare it. All
+                // other received files keep their wrapper-assigned name, which is what keeps this channel safe.
+                if (type != IlivalidatorFileType.TRANSFER_FILE) {
+                    LOGGER.warning("Received a file extension on a non transfer file.");
+                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("Only the transfer file can declare a file extension."));
+                    return;
+                }
+                if (!requestedExtension.equals("xtf") && !requestedExtension.equals("itf")) {
+                    LOGGER.warning("Received invalid transfer file extension.");
+                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("The transfer file extension must be \"xtf\" or \"itf\"."));
+                    return;
+                }
+            }
             String extension = switch (type) {
-                case TRANSFER_FILE -> "xtf";
+                case TRANSFER_FILE -> requestedExtension.isEmpty() ? "xtf" : requestedExtension;
                 case REPOSITORY_ARCHIVE -> "zip";
                 case MODEL_FILE -> "ili";
                 default -> null;

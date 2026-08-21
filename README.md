@@ -60,7 +60,7 @@ Ein kundenspezifisches Repository muss nicht per URL erreichbar sein. Beide Serv
 
 Referenziert wird das entpackte Repository über den Tool-Platzhalter und nicht über ein zusätzliches Feld: `%ITF_DIR` beim `IlivalidatorService`, `%XTF_DIR` beim `Ili2gpkgService`. Ein Profil daraus löst `metaConfig = ilidata:<DatasetId>` über die mitgesendete `ilidata.xml` auf, analog zum bisherigen ilicop-Verhalten mit gemountetem Repository.
 
-**Der Inhalt des Archivs wird unverändert benutzt.** Beim Entpacken prüft der Wrapper Pfade und Grössen, nie die Bedeutung der Dateien. Ein Archiv kann deshalb Modelle definieren, über eine eigene `ilidata.xml` die konfigurierte Profil-Id neu belegen und damit zum Beispiel Prüfungen abschalten, und über eine `ilisite.xml` auf weitere Repositories verketten, die das Tool dann ebenfalls abfragt. Wer das Archiv zusammenstellt, bestimmt also mit, was das Validierungsresultat bedeutet. Inhalte aus nicht geprüfter Quelle, etwa aus einem Upload, gehören nicht in dieses Archiv; einzelne mitgelieferte Modell-Dateien werden stattdessen als `MODEL_FILE` gesendet, dessen Umbenennung genau diese Fähigkeiten ausschliesst (siehe [Ilivalidator service](#ilivalidator-service)).
+**Der Inhalt des Archivs wird unverändert benutzt.** Beim Entpacken prüft der Wrapper Pfade und Grössen, nie die Bedeutung der Dateien. Ein Archiv kann deshalb Modelle definieren, über eine eigene `ilidata.xml` die konfigurierte Profil-Id neu belegen und damit zum Beispiel Prüfungen abschalten, und über eine `ilisite.xml` auf weitere Repositories verketten, die das Tool dann ebenfalls abfragt. Wer das Archiv zusammenstellt, bestimmt also mit, was das Validierungsresultat bedeutet. Inhalte aus nicht geprüfter Quelle, etwa aus einem Upload, gehören nicht in dieses Archiv, sondern als `MODEL_FILE` in den Request: Dessen Umbenennung schliesst genau diese Fähigkeiten aus (siehe [Einzelne Modell-Dateien mitsenden](#einzelne-modell-dateien-mitsenden)).
 
 Pro Aufruf ist höchstens ein Archiv erlaubt. Beim Entpacken gilt:
 
@@ -75,6 +75,12 @@ Pro Aufruf ist höchstens ein Archiv erlaubt. Beim Entpacken gilt:
 Abgelehnt wird immer, bevor ein Tool-Prozess startet, und das Session-Verzeichnis wird auch im Fehlerfall gelöscht.
 
 Die Inline-Route ist für kompakte Repositories gedacht; die Limits markieren die Eignungsgrenze. Grosse, insbesondere katalog-lastige Repositories gehören publiziert und per URL referenziert, dort lädt das Tool nur die benötigten Dateien und der `ILI_CACHE` greift.
+
+### Einzelne Modell-Dateien mitsenden
+
+Beide Services nehmen den Dateityp `MODEL_FILE` an: einzelne `.ili`-Dateien, etwa die mitgelieferten Modelle einer Datenlieferung. Der Wrapper legt sie unter eigenem Namen (`fileN.ili`) ins Session-Verzeichnis, neben die Transferdatei; sichtbar werden sie über den Platzhalter des jeweiligen Tools (`%ITF_DIR` bzw. `%XTF_DIR`) oder über den Tool-Default, wenn `modelDirs` leer bleibt. Der Dateiname eines Modells ist für die Auflösung irrelevant, das Tool scannt das Verzeichnis und parst die Dateien; der Contract braucht deshalb kein Namensfeld.
+
+Weil der Wrapper die Dateien selbst benennt, kann über diesen Weg kein Repository-Index (`ilidata.xml`, `ilisite.xml`, `ilimodels.xml`) eingeschleust werden: Der Inhalt wird als Modell geparst, nie als Index gelesen. Der Kanal eignet sich damit, anders als das Repository-Archiv, auch für Modelle aus nicht geprüfter Quelle, etwa aus einem Upload. Ein geliefertes Modell kann aber weiterhin ein gleichnamiges amtliches verdrängen oder eigene Prüfungen abschwächen; die Position von `%ITF_DIR` bzw. `%XTF_DIR` in `modelDirs` entscheidet die Präzedenz, ungeprüfter Inhalt gehört ans Ende der Liste.
 
 ## Ili2gpkg service
 
@@ -138,10 +144,9 @@ Die `ValidateRequest`-Nachrichten müssen in folgender Reihenfolge gesendet werd
     1. Ein `IlivalidatorFileStart`, welcher den Dateityp definiert.
     2. Direkt anschliessend der jeweilige Dateiinhalt in einer oder mehreren `chunk`-Nachrichten.
 
-Erwartet wird genau eine Transferdatei (`TRANSFER_FILE`), optional zusätzlich beliebig viele Modell-Dateien (`MODEL_FILE`, `.ili`) und ein `REPOSITORY_ARCHIVE`.
-Die Transferdatei wird vom Tool inhaltsbasiert gelesen; auch eine INTERLIS-1-Transferdatei (ITF) wird erkannt.
+Erwartet wird genau eine Transferdatei (`TRANSFER_FILE`), optional zusätzlich beliebig viele Modell-Dateien (`MODEL_FILE`, siehe [Einzelne Modell-Dateien mitsenden](#einzelne-modell-dateien-mitsenden)) und ein `REPOSITORY_ARCHIVE`.
 
-Mitgesendete Modell-Dateien legt der Wrapper unter eigenem Namen (`fileN.ili`) neben die Transferdatei. Sichtbar werden sie über den Platzhalter `%ITF_DIR` in `modelDirs` bzw. über den Tool-Default, wenn `modelDirs` leer bleibt. Weil der Wrapper die Dateien selbst benennt, kann über diesen Weg kein Repository-Index (`ilidata.xml`, `ilisite.xml`, `ilimodels.xml`) eingeschleust werden: Der Inhalt wird als Modell geparst, nie als Index gelesen. Der Kanal eignet sich damit, anders als das Repository-Archiv, auch für Modelle aus nicht geprüfter Quelle, etwa aus einem Upload. Ein geliefertes Modell kann aber weiterhin ein gleichnamiges amtliches verdrängen oder eigene Prüfungen abschwächen; die Position von `%ITF_DIR` in `modelDirs` entscheidet die Präzedenz, ungeprüfter Inhalt gehört ans Ende der Liste.
+Die Transferdatei legt der Wrapper standardmässig als `fileN.xtf` ab. Für eine INTERLIS-1-Transferdatei deklariert der Client `fileExtension = "itf"` im `IlivalidatorFileStart`: Das Tool liest den Inhalt zwar unabhängig von der Endung, schaltet aber nur bei der Endung `.itf` auf die INTERLIS-1-Semantik um (gemessen an ilivalidator 1.15.0: pro Tabelle eindeutige TIDs sind in ITF legal, scheitern aber unter einem `.xtf`-Namen). Erlaubt sind `xtf` und `itf`, leer bedeutet `xtf`. Auf anderen Dateitypen wird das Feld mit `INVALID_ARGUMENT` abgelehnt, damit die Umbenennung der Modell-Dateien nicht unterlaufen werden kann.
 
 Die Modell-Repositories und das Validierungs-Profil werden über `modelDirs` und `metaConfig` gesteuert, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
 

@@ -23,6 +23,10 @@ enum IlivalidatorFileType {
 
 message IlivalidatorFileStart {
   IlivalidatorFileType type = 1;
+  // Original file extension of a TRANSFER_FILE, "xtf" or "itf"; empty means "xtf".
+  // The tool derives its INTERLIS 1 semantics from the extension, so an ITF delivery must set "itf".
+  // Not allowed for other file types.
+  string fileExtension = 2;
 }
 
 message ValidateRequestInfo {
