@@ -168,6 +168,30 @@ tasks.register("downloadIlivalidator") {
     }
 }
 
+// A minimal ilivalidator plugin, built here instead of pulled from a release of a real function library, so the
+// tests prove the --plugins mechanism without depending on that library's evolution and without an external
+// artifact in CI. It compiles against the downloaded ilivalidator distribution and is packed into the catalog
+// layout the plugin tests point at: <catalog root>/<plugin id>/<jar>.
+val testPluginSourceSet = sourceSets.create("testPlugin")
+val testPluginCatalog = layout.buildDirectory.dir("test-plugins")
+
+// The classpath is assigned on the task instead of declared as a dependency, so it is resolved when the task
+// runs. Declaring it holds handles on the distribution jars, which makes the re-extraction in
+// downloadIlivalidator fail on Windows.
+tasks.named<JavaCompile>("compileTestPluginJava") {
+    dependsOn("downloadIlivalidator")
+    classpath = files(provider { fileTree(ilivalidatorHome) { include("**/*.jar") } })
+}
+
+val testPluginJar = tasks.register<Jar>("testPluginJar") {
+    group = "verification"
+    description = "Packs the minimal test plugin into the catalog layout the plugin tests point at"
+
+    from(testPluginSourceSet.output)
+    archiveFileName = "test-functions.jar"
+    destinationDirectory = testPluginCatalog.map { catalog -> catalog.dir("test-functions") }
+}
+
 // Automatically download and set up the ilitools on `gradlew run` and `gradlew test`.
 listOf(tasks.run, tasks.test).forEach { task ->
     task.configure {
@@ -179,4 +203,11 @@ listOf(tasks.run, tasks.test).forEach { task ->
         // Keep the INTERLIS model cache inside the build directory instead of the user home.
         environment("ILI_CACHE", layout.buildDirectory.dir("ilicache").get().asFile.absolutePath)
     }
+}
+
+// The plugin catalog of the tests is built, not shipped, so the test task builds it and tells the tests where
+// it is. Only `test` gets this; a real deployment configures ILIVALIDATOR_PLUGINS_DIR instead.
+tasks.test {
+    dependsOn(testPluginJar)
+    environment("TEST_PLUGIN_CATALOG", testPluginCatalog.get().asFile.absolutePath)
 }

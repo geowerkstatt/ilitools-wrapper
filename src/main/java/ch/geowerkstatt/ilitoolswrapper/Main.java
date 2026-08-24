@@ -6,6 +6,7 @@ import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheckManager;
 import ch.geowerkstatt.ilitoolswrapper.ili2gpkg.Ili2gpkgService;
 import ch.geowerkstatt.ilitoolswrapper.ilivalidator.IlivalidatorService;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
+import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsProcessRunner;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import io.grpc.protobuf.services.ProtoReflectionServiceV1;
@@ -22,8 +23,9 @@ public final class Main {
         final FileManager fileManager = new FilesystemFileManager();
         final IlitoolsRunner ilitoolsRunner = new IlitoolsProcessRunner();
         final PrivateNetworkPolicy privateNetworkPolicy = PrivateNetworkPolicy.fromEnvironment();
+        final PluginCatalog pluginCatalog = PluginCatalog.fromEnvironment();
         final Ili2gpkgService ili2gpkgService = new Ili2gpkgService(fileManager, ilitoolsRunner, privateNetworkPolicy);
-        final IlivalidatorService ilivalidatorService = new IlivalidatorService(fileManager, ilitoolsRunner, privateNetworkPolicy);
+        final IlivalidatorService ilivalidatorService = new IlivalidatorService(fileManager, ilitoolsRunner, privateNetworkPolicy, pluginCatalog);
 
         final ServiceHealthCheckManager serviceHealthCheckManager = new ServiceHealthCheckManager(
                 ili2gpkgService,

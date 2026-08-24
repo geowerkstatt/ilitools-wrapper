@@ -23,6 +23,7 @@ Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Dock
 | `ILI2GPKG_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ili2gpkg Tools |
 | `ILIVALIDATOR_HOME` | Aus Dockerfile oder Gradle `run` Task | Verzeichnis der ilivalidator Installation |
 | `ILIVALIDATOR_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ilivalidator Tools |
+| `ILIVALIDATOR_PLUGINS_DIR` | nicht gesetzt | Verzeichnis mit einem Unterordner pro angebotenem ilivalidator-Plugin. Ohne Angabe bietet das Deployment keine Plugins an (siehe [Plugins zuschalten](#plugins-zuschalten)) |
 | `MODELDIR_ALLOW_PRIVATE_NETWORKS` | `false` | Erlaubt `modelDirs`-URLs, die in nicht öffentliche Adressbereiche auflösen (siehe [Modell-Repositories und Profile](#modell-repositories-und-profile)) |
 
 ## Modell-Repositories und Profile
@@ -170,7 +171,27 @@ Die folgenden Optionen können in der `info`-Nachricht gesetzt und werden als Ko
 | `multiplicityOff` | `--multiplicityOff` |
 | `skipPolygonBuilding` | `--skipPolygonBuilding` |
 
-Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
+Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile), sowie `plugins`, siehe [Plugins zuschalten](#plugins-zuschalten).
+
+### Plugins zuschalten
+
+Ein ilivalidator-Plugin stellt benutzerdefinierte Funktionen bereit, die ein Modell in seinen Constraints aufrufen kann. Ohne das passende Plugin lässt sich ein solcher Constraint nicht auswerten.
+
+Der Wrapper bringt die Plugins nicht im Request entgegen, sondern bietet an, was sein Plugin-Verzeichnis enthält (`ILIVALIDATOR_PLUGINS_DIR`, siehe [Konfiguration](#konfiguration)). Das Verzeichnis enthält **einen Unterordner pro Plugin**, dessen Name die Id ist, und darin die Jar-Dateien des Plugins. Ein Unterordner ohne Jar gilt nicht als Plugin. Ob das Verzeichnis ins Image gebacken oder hineingemountet wird, ist eine Deployment-Entscheidung; der Contract kennt nur Ids.
+
+Das Feld `plugins` der `info`-Nachricht wählt aus dieser Menge aus:
+
+| Fall | Verhalten |
+| --- | --- |
+| `plugins` leer | `--plugins` wird nicht gesetzt, es läuft kein Plugin |
+| Id ist im Plugin-Verzeichnis vorhanden | Die Jars des Plugins werden ins Session-Verzeichnis kopiert und über `--plugins` geladen |
+| Id ist nicht vorhanden, leer oder doppelt | `INVALID_ARGUMENT`, bevor eine Datei entgegengenommen wird |
+
+Für die Jars im Plugin-Verzeichnis gilt die Regel des Werkzeugs: eine Zusatzfunktion muss das Java-Interface `ch.interlis.iox_j.validator.InterlisFunction` implementieren, **und der Name der Java-Klasse muss mit `IoxPlugin` enden** (dokumentiert in `docs/ilivalidator.html` der Distribution). Eine Klasse mit anderem Namen wird stillschweigend ignoriert und äussert sich als übersprungener Constraint, nicht als Fehler. Der Name der Jar-Datei ist dagegen irrelevant, gesucht wird nach Klassen.
+
+Die Menge wird bei **jedem** Request aus dem Verzeichnis gelesen. Ein neu abgelegtes Plugin ist damit ohne Neustart des Dienstes wählbar. Werden mehrere Plugins gewählt, führt der Wrapper deren Jars in einem Verzeichnis zusammen, weil `--plugins` genau eines annimmt; tragen zwei gewählte Plugins eine Jar-Datei mit demselben Namen, wird der Request abgelehnt.
+
+**Ein fehlendes Plugin fällt nicht auf.** Gemessen an ilivalidator 1.15.0: ruft ein `MANDATORY CONSTRAINT` eine Funktion auf, deren Plugin nicht geladen ist, überspringt das Tool den Constraint mit `Warning: ... is not yet implemented.` und **beendet den Lauf erfolgreich**. Eine Option, die das zum Fehler macht, gibt es nicht. Wer aus dem Validierungsresultat eine Freigabe ableitet, muss die Logs deshalb auf übersprungene Constraints prüfen; der Erfolg allein sagt nicht, dass alle Constraints ausgewertet wurden. Aus demselben Grund ist die Zeile `pluginFolder <...>` im Log kein Nachweis: sie erscheint bei jedem Lauf, auch ohne `--plugins`.
 
 ### Ablauf der Antwort
 

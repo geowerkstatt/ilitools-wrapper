@@ -1,0 +1,20 @@
+INTERLIS 2.4;
+
+MODEL PluginFunctionModel
+  AT "mailto:info@geowerkstatt.ch"
+  VERSION "2026-08-24" =
+
+  IMPORTS TestFunctions;
+
+  TOPIC Testdata =
+    OID AS INTERLIS.UUIDOID;
+
+    CLASS ClassA =
+      Name: MANDATORY TEXT*8;
+
+      MANDATORY CONSTRAINT PluginFunctionHolds: TestFunctions.AlwaysFalse(THIS);
+    END ClassA;
+
+  END Testdata;
+
+END PluginFunctionModel.

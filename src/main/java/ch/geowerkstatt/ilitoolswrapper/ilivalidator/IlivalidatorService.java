@@ -7,6 +7,7 @@ import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheck;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.ModelDirValidator;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryArchiveExtractor;
+import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.proto.common.StatusUpdate;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileType;
@@ -23,6 +24,8 @@ import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -44,6 +47,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     private final FileManager fileManager;
     private final IlitoolsRunner ilitoolsRunner;
     private final ModelDirValidator modelDirValidator;
+    private final PluginCatalog pluginCatalog;
 
     /**
      * Creates a new {@link IlivalidatorService} with the specified file manager and tool runner.
@@ -51,11 +55,13 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
      * @param fileManager the FileManager to use for managing temporary files
      * @param ilitoolsRunner the IlitoolsRunner to use for running the ilivalidator tool
      * @param privateNetworkPolicy whether model repository URLs may resolve into non-public address ranges
+     * @param pluginCatalog the ilivalidator plugins this deployment offers for a request to select
      */
-    public IlivalidatorService(FileManager fileManager, IlitoolsRunner ilitoolsRunner, PrivateNetworkPolicy privateNetworkPolicy) {
+    public IlivalidatorService(FileManager fileManager, IlitoolsRunner ilitoolsRunner, PrivateNetworkPolicy privateNetworkPolicy, PluginCatalog pluginCatalog) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
         this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy);
+        this.pluginCatalog = pluginCatalog;
     }
 
     @Override
@@ -89,6 +95,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         private @Nullable ProcessingFile currentFile;
         private @Nullable ValidateRequestInfo info;
         private String modelDirArgument = "";
+        private Set<String> requestedPlugins = Set.of();
 
         ValidateObserver(StreamObserver<ValidateResponse> responseObserver) {
             this.responseObserver = responseObserver;
@@ -115,9 +122,12 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             }
 
             // Rejected here rather than during argument mapping, so that no file is received for a request that cannot run.
+            // The plugin ids are resolved against the catalog on every request, so a plugin added to the configured
+            // directory is selectable without restarting the service.
             try {
                 modelDirArgument = modelDirValidator.validateAndJoin(info.getModelDirsList());
                 ModelDirValidator.validateMetaConfig(info.getMetaConfig());
+                requestedPlugins = pluginCatalog.validate(info.getPluginsList());
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Rejected model repository options: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
@@ -231,6 +241,11 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                             returnResponse(success);
                             return null;
                         });
+            } catch (IllegalArgumentException e) {
+                // Reaches here from the plugin materialization, the only argument mapping step that can still
+                // reject a request that passed the checks in onInfo.
+                LOGGER.warning("Rejected plugin selection: " + e.getMessage());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Failed to start ilivalidator process.", e);
                 cancelWithError(Status.ABORTED.withDescription("Failed to start ilivalidator process."));
@@ -290,9 +305,32 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
 
             addArgument(args, "--modeldir", modelDirArgument);
             addArgument(args, "--metaConfig", requestInfo.getMetaConfig());
+            addArgument(args, "--plugins", materializePlugins(transferFile).map(Path::toString).orElse(""));
 
             args.add(transferFile.filePath().toAbsolutePath().toString());
             return args;
+        }
+
+        /**
+         * Copies the jars of the selected plugins into the plugin subfolder of the session directory. Without a
+         * selection nothing is created and {@code --plugins} stays unset, which leaves the tool with its own
+         * default; that default points into the tool installation, which carries no plugins.
+         */
+        private Optional<Path> materializePlugins(ProcessingFile transferFile) {
+            if (requestedPlugins.isEmpty()) {
+                return Optional.empty();
+            }
+
+            Path sessionDirectory = transferFile.filePath().toAbsolutePath().getParent();
+            if (sessionDirectory == null) {
+                throw new UncheckedIOException(new IOException("The transfer file " + transferFile.filePath() + " is not inside a session directory."));
+            }
+
+            try {
+                return pluginCatalog.materialize(requestedPlugins, sessionDirectory);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
         }
 
         private static void addFlag(List<String> args, String flag, boolean enabled) {

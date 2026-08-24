@@ -4,6 +4,7 @@ import ch.geowerkstatt.ilitoolswrapper.IlitoolsIntegrationTestBase;
 import ch.geowerkstatt.ilitoolswrapper.IntegrationTestSupport;
 import ch.geowerkstatt.ilitoolswrapper.files.FilesystemFileManager;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
+import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorServiceGrpc;
@@ -30,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -55,7 +57,9 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     @Override
     protected BindableService createService() {
         // The repository of the meta config test is served from localhost, so non-public addresses must be allowed.
-        return new IlivalidatorService(new FilesystemFileManager(), new IlitoolsProcessRunner(), PrivateNetworkPolicy.ALLOW);
+        // The plugin catalog is the one the build packs the minimal test plugin into, see the testPluginJar task.
+        String catalog = Objects.requireNonNull(System.getenv("TEST_PLUGIN_CATALOG"), "The test task must set TEST_PLUGIN_CATALOG.");
+        return new IlivalidatorService(new FilesystemFileManager(), new IlitoolsProcessRunner(), PrivateNetworkPolicy.ALLOW, new PluginCatalog(Path.of(catalog)));
     }
 
     @Test
@@ -141,6 +145,43 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         ValidationResult result = readResponse(call, "missing_model_log.xtf");
         assertFalse(result.success, "Validation should fail when the model cannot be resolved. Log:\n" + result.log);
         assertTrue(result.log.contains("SimpleModel"), "Text log should name the unresolvable model. Log:\n" + result.log);
+    }
+
+    @Test
+    public void testValidatePluginFunctionIsSkippedWithoutThePlugin() throws Exception {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        // Measured against ilivalidator 1.15.0: a mandatory constraint whose function has no implementation is
+        // skipped with a warning and the run still reports success. A missing plugin is therefore invisible in the
+        // success flag, which is what makes the inverted pair below the only proof that --plugins took effect.
+        call.write(info(info -> info.addModelDirs("%ITF_DIR/models")));
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer_plugin_function.xtf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_plugin_function.ili");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/TestFunctions.ili");
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "plugin_absent_log.xtf");
+        assertTrue(result.success, "Without the plugin the constraint is skipped, so the run reports success. Log:\n" + result.log);
+        assertTrue(result.log.contains("is not yet implemented"), "Text log should report the skipped constraint. Log:\n" + result.log);
+    }
+
+    @Test
+    public void testValidatePluginFunctionFailsWithThePlugin() throws Exception {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        // Same data and models as above, only the plugin selection differs. The plugin function always returns
+        // false, so the constraint is evaluated and violated: the inverted success flag proves the plugin ran.
+        call.write(info(info -> info.addModelDirs("%ITF_DIR/models").addPlugins("test-functions")));
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer_plugin_function.xtf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_plugin_function.ili");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/TestFunctions.ili");
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "plugin_present_log.xtf");
+        assertFalse(result.success, "With the plugin the constraint is evaluated and fails. Log:\n" + result.log);
+        assertFalse(result.log.contains("is not yet implemented"), "The constraint must be evaluated, not skipped. Log:\n" + result.log);
     }
 
     @Test
