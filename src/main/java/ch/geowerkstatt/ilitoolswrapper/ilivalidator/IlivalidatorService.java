@@ -135,24 +135,11 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 return;
             }
             IlivalidatorFileType type = fileStart.getType();
-            String requestedExtension = fileStart.getFileExtension();
-            if (!requestedExtension.isEmpty()) {
-                // The tool derives its INTERLIS 1 semantics from the extension of the transfer file (measured:
-                // per-table TIDs of an ITF are rejected under an .xtf name), so the client may declare it. All
-                // other received files keep their wrapper-assigned name, which is what keeps this channel safe.
-                if (type != IlivalidatorFileType.TRANSFER_FILE) {
-                    LOGGER.warning("Received a file extension on a non transfer file.");
-                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("Only the transfer file can declare a file extension."));
-                    return;
-                }
-                if (!requestedExtension.equals("xtf") && !requestedExtension.equals("itf")) {
-                    LOGGER.warning("Received invalid transfer file extension.");
-                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("The transfer file extension must be \"xtf\" or \"itf\"."));
-                    return;
-                }
-            }
+            // The transfer file type carries the format, because the tool switches to its INTERLIS 1 semantics
+            // only for an .itf name (measured: per-table TIDs of an ITF are rejected under an .xtf name).
             String extension = switch (type) {
-                case TRANSFER_FILE -> requestedExtension.isEmpty() ? "xtf" : requestedExtension;
+                case TRANSFER_FILE_XTF -> "xtf";
+                case TRANSFER_FILE_ITF -> "itf";
                 case REPOSITORY_ARCHIVE -> "zip";
                 case MODEL_FILE -> "ili";
                 default -> null;
@@ -276,7 +263,12 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         // Exactly one transfer file is what makes a validate request runnable, so the optional of the file set carries
         // straight through to the optional of the arguments.
         private Optional<List<String>> validateRequestToArguments() {
-            return files.getSingle(IlivalidatorFileType.TRANSFER_FILE).map(this::buildValidateArguments);
+            List<ProcessingFile> transferFiles = new ArrayList<>(files.getAll(IlivalidatorFileType.TRANSFER_FILE_XTF));
+            transferFiles.addAll(files.getAll(IlivalidatorFileType.TRANSFER_FILE_ITF));
+            if (transferFiles.size() != 1) {
+                return Optional.empty();
+            }
+            return Optional.of(buildValidateArguments(transferFiles.getFirst()));
         }
 
         private List<String> buildValidateArguments(ProcessingFile transferFile) {

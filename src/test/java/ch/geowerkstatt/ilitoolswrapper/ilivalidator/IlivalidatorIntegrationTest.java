@@ -116,7 +116,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         // A delivered model may import another delivered model: all model files land in the same models subfolder,
         // which the tool scans as one repository, so the import resolves without any remote repository.
         call.write(info(info -> info.addModelDirs("%ITF_DIR/models")));
-        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer_imports_base.xtf");
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_imports_base.xtf");
         writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_imports_base.ili");
         writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_base.ili");
         call.halfClose();
@@ -135,7 +135,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         // so its folder does not even exist. The tool cannot resolve the model, which is a validation result, not
         // an RPC error.
         call.write(info(info -> info.addModelDirs("%ITF_DIR/models")));
-        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer.xtf");
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer.xtf");
         call.halfClose();
 
         ValidationResult result = readResponse(call, "missing_model_log.xtf");
@@ -243,13 +243,13 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
         var call = client.validate();
 
-        // The original use case of geopilot#683: an INTERLIS 1 delivery brings its own model. The declared itf
-        // extension is what switches the tool to INTERLIS 1 semantics; the fixture reuses a TID across two tables,
-        // which is legal in ITF but fails under an xtf name, so this test pins that the extension reaches the tool.
+        // The original use case of geopilot#683: an INTERLIS 1 delivery brings its own model. The ITF transfer file
+        // type is what switches the tool to INTERLIS 1 semantics; the fixture reuses a TID across two tables, which
+        // is legal in ITF but fails under an xtf name, so this test pins that the type reaches the tool.
         // The model is sent before the transfer file to pin that the file order does not matter.
         call.write(info(info -> info.addModelDirs("%ITF_DIR/models")));
         writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_interlis1.ili");
-        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "itf", "ilivalidator/transfer_interlis1.itf");
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_ITF, "ilivalidator/transfer_interlis1.itf");
         call.halfClose();
 
         ValidationResult result = readResponse(call, "interlis1_log.xtf");
@@ -269,7 +269,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         repositoryFirst.write(info(info -> info
                 .addModelDirs("%ITF_DIR/repository")
                 .addModelDirs("%ITF_DIR/models")));
-        writeResourceFile(repositoryFirst, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer_invalid.xtf");
+        writeResourceFile(repositoryFirst, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_invalid.xtf");
         writeResourceFile(repositoryFirst, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_lax.ili");
         writeRepositoryArchive(repositoryFirst, archive);
         repositoryFirst.halfClose();
@@ -282,7 +282,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         modelsFirst.write(info(info -> info
                 .addModelDirs("%ITF_DIR/models")
                 .addModelDirs("%ITF_DIR/repository")));
-        writeResourceFile(modelsFirst, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer_invalid.xtf");
+        writeResourceFile(modelsFirst, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_invalid.xtf");
         writeResourceFile(modelsFirst, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_lax.ili");
         writeRepositoryArchive(modelsFirst, archive);
         modelsFirst.halfClose();
@@ -298,7 +298,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         var call = client.validate();
 
         call.write(info(info -> info.addModelDirs("%ITF_DIR")));
-        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, "ilivalidator/transfer.xtf");
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer.xtf");
         writeRepositoryArchive(call, archiveOf(Map.of("../escaped.xml", "gotcha")));
         call.halfClose();
 
@@ -362,12 +362,6 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         }
     }
 
-    private static ValidateRequest info() {
-        return ValidateRequest.newBuilder()
-                .setInfo(ValidateRequestInfo.newBuilder())
-                .build();
-    }
-
     private static ValidateRequest info(Consumer<ValidateRequestInfo.Builder> configureInfo) {
         ValidateRequestInfo.Builder infoBuilder = ValidateRequestInfo.newBuilder();
         configureInfo.accept(infoBuilder);
@@ -381,20 +375,11 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
             BlockingClientCall<ValidateRequest, ValidateResponse> call,
             IlivalidatorFileType fileType,
             String resourcePath) throws StatusException, InterruptedException, IOException {
-        writeResourceFile(call, fileType, "", resourcePath);
-    }
-
-    private static void writeResourceFile(
-            BlockingClientCall<ValidateRequest, ValidateResponse> call,
-            IlivalidatorFileType fileType,
-            String fileExtension,
-            String resourcePath) throws StatusException, InterruptedException, IOException {
         writeResourceFile(
                 call,
                 ValidateRequest.newBuilder()
                         .setFileStart(IlivalidatorFileStart.newBuilder()
-                                .setType(fileType)
-                                .setFileExtension(fileExtension))
+                                .setType(fileType))
                         .build(),
                 chunk -> ValidateRequest.newBuilder()
                         .setChunk(chunk)
@@ -409,7 +394,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     private static void writeTransferFileAndModel(
             BlockingClientCall<ValidateRequest, ValidateResponse> call,
             String transferResourcePath) throws StatusException, InterruptedException, IOException {
-        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE, transferResourcePath);
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, transferResourcePath);
         writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model.ili");
     }
 

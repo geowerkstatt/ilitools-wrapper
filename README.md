@@ -148,9 +148,9 @@ Die `ValidateRequest`-Nachrichten müssen in folgender Reihenfolge gesendet werd
     1. Ein `IlivalidatorFileStart`, welcher den Dateityp definiert.
     2. Direkt anschliessend der jeweilige Dateiinhalt in einer oder mehreren `chunk`-Nachrichten.
 
-Erwartet wird genau eine Transferdatei (`TRANSFER_FILE`), optional zusätzlich beliebig viele Modell-Dateien (`MODEL_FILE`, siehe [Einzelne Modell-Dateien mitsenden](#einzelne-modell-dateien-mitsenden)) und ein `REPOSITORY_ARCHIVE`.
+Erwartet wird genau eine Transferdatei, gesendet als `TRANSFER_FILE_XTF` oder `TRANSFER_FILE_ITF`, optional zusätzlich beliebig viele Modell-Dateien (`MODEL_FILE`, siehe [Einzelne Modell-Dateien mitsenden](#einzelne-modell-dateien-mitsenden)) und ein `REPOSITORY_ARCHIVE`.
 
-Die Transferdatei legt der Wrapper standardmässig als `fileN.xtf` ab. Für eine INTERLIS-1-Transferdatei deklariert der Client `fileExtension = "itf"` im `IlivalidatorFileStart`: Das Tool liest den Inhalt zwar unabhängig von der Endung, schaltet aber nur bei der Endung `.itf` auf die INTERLIS-1-Semantik um (gemessen an ilivalidator 1.15.0: pro Tabelle eindeutige TIDs sind in ITF legal, scheitern aber unter einem `.xtf`-Namen). Erlaubt sind `xtf` und `itf`, leer bedeutet `xtf`. Auf anderen Dateitypen wird das Feld mit `INVALID_ARGUMENT` abgelehnt, damit die Umbenennung der Modell-Dateien nicht unterlaufen werden kann.
+Der Transferdatei-Typ trägt das Format: Der Wrapper legt die Datei entsprechend als `fileN.xtf` bzw. `fileN.itf` ab, und die Unterscheidung existiert, weil das Tool nur bei der Endung `.itf` auf die INTERLIS-1-Semantik umschaltet (gemessen an ilivalidator 1.15.0: pro Tabelle eindeutige TIDs sind in ITF legal, scheitern aber unter einem `.xtf`-Namen). Eine INTERLIS-1-Lieferung sendet ihre Transferdatei deshalb als `TRANSFER_FILE_ITF`.
 
 Die Modell-Repositories und das Validierungs-Profil werden über `modelDirs` und `metaConfig` gesteuert, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
 

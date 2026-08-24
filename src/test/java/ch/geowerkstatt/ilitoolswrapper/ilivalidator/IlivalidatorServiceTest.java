@@ -43,7 +43,7 @@ public final class IlivalidatorServiceTest {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("data"));
         InMemoryProcessingFile created = fileManager.lastCreatedFile();
         requestObserver.onCompleted();
@@ -59,7 +59,7 @@ public final class IlivalidatorServiceTest {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("Hello"));
         requestObserver.onNext(chunk(" "));
         requestObserver.onNext(chunk("World"));
@@ -88,7 +88,7 @@ public final class IlivalidatorServiceTest {
                         .setMultiplicityOff(true)
                         .setSkipPolygonBuilding(true))
                 .build());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("data"));
         requestObserver.onCompleted();
 
@@ -115,7 +115,7 @@ public final class IlivalidatorServiceTest {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("data"));
         requestObserver.onCompleted();
 
@@ -144,7 +144,7 @@ public final class IlivalidatorServiceTest {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("data"));
         InMemoryProcessingFile transferFile = fileManager.lastCreatedFile();
         requestObserver.onCompleted();
@@ -173,7 +173,7 @@ public final class IlivalidatorServiceTest {
     void fileStartBeforeInfoIsRejected() {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
 
         assertNotNull(responseObserver.error());
         assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
@@ -197,9 +197,9 @@ public final class IlivalidatorServiceTest {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("first"));
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("second"));
         requestObserver.onCompleted();
 
@@ -226,7 +226,7 @@ public final class IlivalidatorServiceTest {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("data"));
         requestObserver.onNext(fileStart(IlivalidatorFileType.REPOSITORY_ARCHIVE));
         requestObserver.onNext(chunk("first"));
@@ -258,7 +258,7 @@ public final class IlivalidatorServiceTest {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("data"));
         requestObserver.onNext(fileStart(IlivalidatorFileType.MODEL_FILE));
         requestObserver.onNext(chunk("first model"));
@@ -278,7 +278,7 @@ public final class IlivalidatorServiceTest {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("data"));
         InMemoryProcessingFile transferFile = fileManager.lastCreatedFile();
         requestObserver.onNext(fileStart(IlivalidatorFileType.MODEL_FILE));
@@ -296,40 +296,32 @@ public final class IlivalidatorServiceTest {
     }
 
     @Test
-    void transferFileExtensionItfIsApplied() {
+    void itfTransferFileIsStoredWithItfExtension() {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE, "itf"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_ITF));
         requestObserver.onNext(chunk("SCNT"));
 
         assertNull(responseObserver.error());
         InMemoryProcessingFile created = fileManager.lastCreatedFile();
-        assertTrue(created.filePath().toString().endsWith(".itf"), "The transfer file should keep the declared itf extension, but was " + created.filePath());
+        assertTrue(created.filePath().toString().endsWith(".itf"), "An ITF transfer file should keep the itf extension, but was " + created.filePath());
     }
 
     @Test
-    void invalidTransferFileExtensionIsRejected() {
+    void mixedTransferFileTypesAreRejected() {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE, "pdf"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
+        requestObserver.onNext(chunk("first"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_ITF));
+        requestObserver.onNext(chunk("second"));
+        requestObserver.onCompleted();
 
         assertNotNull(responseObserver.error());
         assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
-        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected extension.");
-    }
-
-    @Test
-    void fileExtensionOnNonTransferFileIsRejected() {
-        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
-
-        requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.MODEL_FILE, "itf"));
-
-        assertNotNull(responseObserver.error());
-        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
-        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created when the extension is set on a non transfer file.");
+        assertNull(ilitoolsRunner.lastArguments(), "The transfer file must be unique across both transfer file types.");
     }
 
     @Test
@@ -377,7 +369,7 @@ public final class IlivalidatorServiceTest {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
 
         assertNotNull(responseObserver.error());
         assertTrue(fileManager.createdFiles().isEmpty());
@@ -389,7 +381,7 @@ public final class IlivalidatorServiceTest {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("data"));
         requestObserver.onCompleted();
 
@@ -407,7 +399,7 @@ public final class IlivalidatorServiceTest {
                         .addModelDirs("https://models.interlis.ch/")
                         .setMetaConfig("ilidata:DEFAULT"))
                 .build());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("data"));
         InMemoryProcessingFile transferFile = fileManager.lastCreatedFile();
         requestObserver.onCompleted();
@@ -529,14 +521,6 @@ public final class IlivalidatorServiceTest {
         return ValidateRequest.newBuilder()
                 .setFileStart(IlivalidatorFileStart.newBuilder()
                         .setType(fileType))
-                .build();
-    }
-
-    private static ValidateRequest fileStart(IlivalidatorFileType fileType, String fileExtension) {
-        return ValidateRequest.newBuilder()
-                .setFileStart(IlivalidatorFileStart.newBuilder()
-                        .setType(fileType)
-                        .setFileExtension(fileExtension))
                 .build();
     }
 
