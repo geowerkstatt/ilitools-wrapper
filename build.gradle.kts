@@ -143,9 +143,13 @@ tasks.register("downloadIlivalidator") {
     description = "Downloads ilivalidator into ./ilitools for local development"
 
     val targetDir = ilivalidatorHome
+    val jarExists = ilivalidatorVersion.map { version -> targetDir.file("ilivalidator-$version.jar").asFile.exists() }
 
     inputs.property("version", ilivalidatorVersion)
     outputs.dir(targetDir)
+
+    // Skip when the matching version is already present
+    onlyIf { !jarExists.getOrElse(false) }
 
     doLast {
         val version = ilivalidatorVersion.orNull ?: throw GradleException("Set -PilivalidatorVersion=<version>.")
