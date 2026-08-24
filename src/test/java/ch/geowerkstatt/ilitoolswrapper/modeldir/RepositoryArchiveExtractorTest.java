@@ -101,12 +101,13 @@ public final class RepositoryArchiveExtractorTest {
     }
 
     @Test
-    void extractsAReceivedArchiveNextToItself() throws IOException {
+    void extractsAReceivedArchiveIntoTheRepositorySubfolder() throws IOException {
         Path archive = archiveWith(Map.of("ilidata.xml", "<TRANSFER/>"));
 
         new RepositoryArchiveExtractor().extractReceived(List.of(new FilesystemProcessingFile(archive)));
 
-        assertEquals("<TRANSFER/>", Files.readString(tempDir.resolve("ilidata.xml")), "The archive should be extracted into the directory it was received in.");
+        Path extracted = tempDir.resolve(RepositoryArchiveExtractor.REPOSITORY_SUBFOLDER).resolve("ilidata.xml");
+        assertEquals("<TRANSFER/>", Files.readString(extracted), "The archive should be extracted into its own subfolder of the directory it was received in.");
     }
 
     @Test

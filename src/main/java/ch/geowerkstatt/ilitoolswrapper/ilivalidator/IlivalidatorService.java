@@ -36,6 +36,9 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     // %ITF_DIR is the directory of the transfer file, which is the session directory of the request.
     private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%ITF_DIR");
 
+    // Session subfolder for received MODEL_FILEs, addressed as %ITF_DIR/models in the model dirs.
+    private static final String MODEL_FILES_SUBFOLDER = "models";
+
     private static final Logger LOGGER = Logger.getLogger(IlivalidatorService.class.getName());
     private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
     private final FileManager fileManager;
@@ -162,7 +165,12 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
 
             try {
                 int fileNumber = files.size() + 1;
-                currentFile = files.create(type, "file" + fileNumber, extension);
+                String fileName = "file" + fileNumber;
+                // Model files get their own subfolder, so a model dir entry can address exactly them
+                // (%ITF_DIR/models) and rank them against the other sources.
+                currentFile = type == IlivalidatorFileType.MODEL_FILE
+                        ? files.create(type, MODEL_FILES_SUBFOLDER, fileName, extension)
+                        : files.create(type, fileName, extension);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
@@ -247,8 +255,9 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             files.deleteAll();
         }
 
-        // Runs after the received files are closed and before the log files exist, so a colliding archive entry can
-        // only hit a file the caller sent itself. Returns false when the request was cancelled.
+        // Runs after the received files are closed and before the log files exist. The archive lands in its own
+        // subfolder, so its entries cannot collide with any other file of the session. Returns false when the
+        // request was cancelled.
         private boolean extractRepositoryArchive() {
             try {
                 REPOSITORY_ARCHIVE_EXTRACTOR.extractReceived(files.getAll(IlivalidatorFileType.REPOSITORY_ARCHIVE));

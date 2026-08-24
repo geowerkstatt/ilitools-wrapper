@@ -38,6 +38,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     // operations that read the model from the GeoPackage itself.
     private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%XTF_DIR", "%ILI_FROM_DB");
 
+    // Session subfolder for received MODEL_FILEs, addressed as %XTF_DIR/models in the model dirs.
+    private static final String MODEL_FILES_SUBFOLDER = "models";
+
     private record ProcessingArguments(Ili2gpkgFileType outputFileType, boolean returnOutputOnError, List<String> arguments) { }
 
     private static final Logger LOGGER = Logger.getLogger(Ili2gpkgService.class.getName());
@@ -151,7 +154,12 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
             try {
                 int fileNumber = files.size() + 1;
-                currentFile = files.create(type, "file" + fileNumber, extension);
+                String fileName = "file" + fileNumber;
+                // Model files get their own subfolder, so a model dir entry can address exactly them
+                // (%XTF_DIR/models) and rank them against the other sources.
+                currentFile = type == Ili2gpkgFileType.MODEL_FILE
+                        ? files.create(type, MODEL_FILES_SUBFOLDER, fileName, extension)
+                        : files.create(type, fileName, extension);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
@@ -237,8 +245,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             files.deleteAll();
         }
 
-        // Runs after the received files are closed and before the output files exist, so a colliding archive entry
-        // can only hit a file the caller sent itself. Returns false when the request was cancelled.
+        // Runs after the received files are closed and before the output files exist. The archive lands in its own
+        // subfolder, so its entries cannot collide with any other file of the session. Returns false when the
+        // request was cancelled.
         private boolean extractRepositoryArchive() {
             try {
                 REPOSITORY_ARCHIVE_EXTRACTOR.extractReceived(files.getAll(Ili2gpkgFileType.REPOSITORY_ARCHIVE));

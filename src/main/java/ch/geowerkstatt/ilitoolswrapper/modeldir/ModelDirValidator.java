@@ -4,6 +4,7 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -12,9 +13,11 @@ import java.util.Set;
  * Validates the model repository options of a request before they are handed to an INTERLIS tool.
  *
  * <p>The entries are passed through to the tool option {@code --modeldir} unchanged, so only allowed forms may
- * enter: {@code http(s)} URLs and the placeholders of the tool the validator was created for. A local path would
- * give the caller access to server side directories such as the session directory of another request, and an entry
- * containing the join character {@code ;} would expand into several entries.
+ * enter: {@code http(s)} URLs and the placeholders of the tool the validator was created for, optionally followed
+ * by a relative subpath below the directory the placeholder expands to (for example the subfolders the wrapper
+ * materializes received files into). A local path would give the caller access to server side directories such as
+ * the session directory of another request, and an entry containing the join character {@code ;} would expand into
+ * several entries.
  */
 public final class ModelDirValidator {
     private static final String ENTRY_SEPARATOR = ";";
@@ -85,8 +88,24 @@ public final class ModelDirValidator {
     }
 
     private void validatePlaceholder(String modelDir) {
-        if (!allowedPlaceholders.contains(modelDir)) {
+        int subpathIndex = modelDir.indexOf('/');
+        String placeholder = subpathIndex < 0 ? modelDir : modelDir.substring(0, subpathIndex);
+        if (!allowedPlaceholders.contains(placeholder)) {
             throw new IllegalArgumentException("Model dir entry \"" + modelDir + "\" is not an allowed placeholder, expected one of " + allowedPlaceholders + ".");
+        }
+        if (subpathIndex >= 0) {
+            validatePlaceholderSubpath(modelDir, modelDir.substring(subpathIndex + 1));
+        }
+    }
+
+    // A placeholder expands to a directory of the session, so a subpath stays inside the session exactly when no
+    // segment leaves it. This is what makes the wrapper subfolders (models, repository) addressable as own entries.
+    private static void validatePlaceholderSubpath(String modelDir, String subpath) {
+        boolean valid = !subpath.isEmpty() && Arrays.stream(subpath.split("/", -1))
+                .allMatch(segment -> !segment.isEmpty() && !segment.equals(".") && !segment.equals("..") && !segment.contains("\\"));
+        if (!valid) {
+            throw new IllegalArgumentException("Model dir entry \"" + modelDir
+                    + "\" must address a subfolder with a relative path: no empty segments, no \".\" or \"..\" and no backslashes.");
         }
     }
 

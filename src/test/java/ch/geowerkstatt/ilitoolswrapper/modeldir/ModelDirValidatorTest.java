@@ -42,6 +42,37 @@ public final class ModelDirValidatorTest {
     }
 
     @Test
+    void placeholderWithSubpathIsAccepted() {
+        assertEquals("%ITF_DIR/repository;%ITF_DIR/models", ilivalidator().validateAndJoin(List.of("%ITF_DIR/repository", "%ITF_DIR/models")));
+        assertEquals("%XTF_DIR/repository/sub", ili2gpkg().validateAndJoin(List.of("%XTF_DIR/repository/sub")));
+    }
+
+    @Test
+    void subpathLeavingTheDirectoryIsRejected() {
+        assertRejected(ilivalidator(), "%ITF_DIR/../other-session");
+        assertRejected(ilivalidator(), "%ITF_DIR/repository/../../escape");
+        assertRejected(ilivalidator(), "%ITF_DIR/./models");
+    }
+
+    @Test
+    void subpathWithEmptySegmentIsRejected() {
+        assertRejected(ilivalidator(), "%ITF_DIR/");
+        assertRejected(ilivalidator(), "%ITF_DIR//models");
+        assertRejected(ilivalidator(), "%ITF_DIR/models/");
+    }
+
+    @Test
+    void subpathWithBackslashIsRejected() {
+        assertRejected(ilivalidator(), "%ITF_DIR/models\\sub");
+    }
+
+    @Test
+    void subpathOnOtherToolsPlaceholderIsRejected() {
+        assertRejected(ilivalidator(), "%XTF_DIR/models");
+        assertRejected(ili2gpkg(), "%ITF_DIR/models");
+    }
+
+    @Test
     void entryWithSemicolonIsRejected() {
         assertRejected(ilivalidator(), "%ITF_DIR;https://models.interlis.ch/");
     }

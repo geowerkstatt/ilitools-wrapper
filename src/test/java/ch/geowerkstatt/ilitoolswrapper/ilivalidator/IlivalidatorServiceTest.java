@@ -249,7 +249,8 @@ public final class IlivalidatorServiceTest {
 
         assertNull(responseObserver.error());
         InMemoryProcessingFile created = fileManager.lastCreatedFile();
-        assertTrue(created.filePath().toString().endsWith(".ili"), "The model should be stored as an ili file, but was " + created.filePath());
+        String path = created.filePath().toString().replace('\\', '/');
+        assertTrue(path.endsWith("models/file1.ili"), "The model should be stored as an ili file in the models subfolder, but was " + created.filePath());
     }
 
     @Test
