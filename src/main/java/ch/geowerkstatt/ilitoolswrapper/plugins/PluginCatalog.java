@@ -35,7 +35,7 @@ public final class PluginCatalog {
      */
     public static final String PLUGIN_SUBFOLDER = "plugins";
 
-    private static final String PLUGINS_DIR_ENV = "ILIVALIDATOR_PLUGINS_DIR";
+    private static final String PLUGINS_DIR_ENV = "ILITOOLS_PLUGINS_DIR";
     private static final String JAR_SUFFIX = ".jar";
 
     private final @Nullable Path root;
@@ -50,7 +50,7 @@ public final class PluginCatalog {
     }
 
     /**
-     * Reads the catalog location from the environment variable {@code ILIVALIDATOR_PLUGINS_DIR}. An unset or
+     * Reads the catalog location from the environment variable {@code ILITOOLS_PLUGINS_DIR}. An unset or
      * empty value means this deployment offers no plugins, so every request that names one is rejected.
      *
      * @return a catalog over the configured directory, or an empty catalog

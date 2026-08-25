@@ -44,7 +44,7 @@ ENV ILI2GPKG_VERSION=${ILI2GPKG_VERSION} \
     ILI2GPKG_HOME=/opt/ili2gpkg \
     ILIVALIDATOR_VERSION=${ILIVALIDATOR_VERSION} \
     ILIVALIDATOR_HOME=/opt/ilivalidator \
-    ILIVALIDATOR_PLUGINS_DIR=/plugins \
+    ILITOOLS_PLUGINS_DIR=/plugins \
     ILI_CACHE=/var/cache/ilicache \
     PROCESSING_DIR=/app/processing
 
@@ -63,8 +63,8 @@ RUN groupadd --gid=$APP_UID app && useradd --uid=$APP_UID --gid=$APP_UID --creat
 # plugin needs no new image, and an empty directory means no plugin is on offer. It deliberately does not live
 # under ILIVALIDATOR_HOME: <jarDir>/plugins is the tool default and would load every jar on every run,
 # regardless of what a request selected.
-RUN mkdir -p ${ILI_CACHE} ${PROCESSING_DIR} ${ILIVALIDATOR_PLUGINS_DIR} \
-    && chown -R $APP_UID:$APP_UID ${ILI_CACHE} ${PROCESSING_DIR} ${ILIVALIDATOR_PLUGINS_DIR}
+RUN mkdir -p ${ILI_CACHE} ${PROCESSING_DIR} ${ILITOOLS_PLUGINS_DIR} \
+    && chown -R $APP_UID:$APP_UID ${ILI_CACHE} ${PROCESSING_DIR} ${ILITOOLS_PLUGINS_DIR}
 
 USER $APP_UID
 
