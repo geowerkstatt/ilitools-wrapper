@@ -131,7 +131,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             try {
                 modelDirArgument = modelDirValidator.validateAndJoin(info.getModelDirsList());
                 ModelDirValidator.validateMetaConfig(info.getMetaConfig());
-                requestedPlugins = pluginCatalog.validate(info.getPluginsList());
+                requestedPlugins = pluginCatalog.validate(info.getPluginIdsList());
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Rejected model repository options: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));

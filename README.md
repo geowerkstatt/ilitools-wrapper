@@ -91,13 +91,13 @@ Da jede Quelle ihren eigenen Unterordner hat, ist auch die Kombination mit einem
 
 Ein Plugin stellt benutzerdefinierte Funktionen bereit, die ein Modell in seinen Constraints aufrufen kann. Ohne das passende Plugin lässt sich ein solcher Constraint nicht auswerten.
 
-**Beide Services** haben dafür das optionale Feld `plugins` in der `info`-Nachricht. Der Wrapper nimmt keine Jars im Request entgegen, sondern bietet an, was sein Plugin-Verzeichnis enthält (`ILITOOLS_PLUGINS_DIR`, siehe [Konfiguration](#konfiguration)). Das Verzeichnis enthält **einen Unterordner pro Plugin**, dessen Name die Id ist, und darin die Jar-Dateien des Plugins. Ein Unterordner ohne Jar gilt nicht als Plugin. Ob das Verzeichnis ins Image gebacken oder hineingemountet wird, ist eine Deployment-Entscheidung; der Contract kennt nur Ids.
+**Beide Services** haben dafür das optionale Feld `pluginIds` in der `info`-Nachricht. Der Wrapper nimmt keine Jars im Request entgegen, sondern bietet an, was sein Plugin-Verzeichnis enthält (`ILITOOLS_PLUGINS_DIR`, siehe [Konfiguration](#konfiguration)). Das Verzeichnis enthält **einen Unterordner pro Plugin**, dessen Name die Id ist, und darin die Jar-Dateien des Plugins. Ein Unterordner ohne Jar gilt nicht als Plugin. Ob das Verzeichnis ins Image gebacken oder hineingemountet wird, ist eine Deployment-Entscheidung; der Contract kennt nur Ids.
 
-Das Feld `plugins` der `info`-Nachricht wählt aus dieser Menge aus:
+Das Feld `pluginIds` der `info`-Nachricht wählt aus dieser Menge aus. Es heisst nach dem, was es trägt, und nicht nach der Tool-Option: `--plugins` nimmt einen einzelnen Ordner, den der Wrapper aus dieser Auswahl erst zusammenstellt.
 
 | Fall | Verhalten |
 | --- | --- |
-| `plugins` leer | `--plugins` wird nicht gesetzt, es läuft kein Plugin |
+| `pluginIds` leer | `--plugins` wird nicht gesetzt, es läuft kein Plugin |
 | Id ist im Plugin-Verzeichnis vorhanden | Die Jars des Plugins werden ins Session-Verzeichnis kopiert und über `--plugins` geladen |
 | Id ist nicht vorhanden, leer oder doppelt | `INVALID_ARGUMENT`, bevor eine Datei entgegengenommen wird |
 
@@ -141,7 +141,7 @@ Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet u
 | `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
 | `OPERATION_VALIDATE` | Validiert die Daten in einem GeoPackage | `DB_FILE` (`.gpkg`) | `XTF_LOG_FILE` (`.xtf`) |
 
-Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig` sowie der optionale Dateityp `REPOSITORY_ARCHIVE` zur Verfügung, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile). Zusatzfunktionen aus Plugins lassen sich über `plugins` zuschalten, siehe [Plugins zuschalten](#plugins-zuschalten); ili2gpkg kann mit `OPERATION_VALIDATE` ebenfalls validieren und nimmt dieselbe Tool-Option.
+Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig` sowie der optionale Dateityp `REPOSITORY_ARCHIVE` zur Verfügung, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile). Zusatzfunktionen aus Plugins lassen sich über `pluginIds` zuschalten, siehe [Plugins zuschalten](#plugins-zuschalten); ili2gpkg kann mit `OPERATION_VALIDATE` ebenfalls validieren und nimmt dieselbe Tool-Option.
 
 ### Ablauf der Antwort
 
@@ -192,7 +192,7 @@ Die folgenden Optionen können in der `info`-Nachricht gesetzt und werden als Ko
 | `multiplicityOff` | `--multiplicityOff` |
 | `skipPolygonBuilding` | `--skipPolygonBuilding` |
 
-Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile), sowie `plugins`, siehe [Plugins zuschalten](#plugins-zuschalten).
+Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile), sowie `pluginIds`, siehe [Plugins zuschalten](#plugins-zuschalten).
 
 ### Ablauf der Antwort
 

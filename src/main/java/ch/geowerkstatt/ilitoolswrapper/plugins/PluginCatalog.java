@@ -12,11 +12,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * The ilivalidator plugins this deployment offers, and the materialization of a selected subset for a single
- * request.
+ * The plugins this deployment offers to the INTERLIS tools, and the materialization of a selected subset for
+ * a single request.
  *
  * <p>The catalog is a directory with one subfolder per plugin; the subfolder name is the id a request selects,
  * and the jars inside it are what the tool loads. Whether that directory is baked into the image or mounted
@@ -71,17 +72,18 @@ public final class PluginCatalog {
             return Set.of();
         }
 
-        Set<String> ids = new TreeSet<>();
         try (Stream<Path> candidates = Files.list(root)) {
-            candidates.filter(Files::isDirectory)
+            // A TreeSet rather than toSet(): the rejection of an unknown id lists what is available, and a stable
+            // order keeps that message deterministic.
+            return candidates.filter(Files::isDirectory)
                     .filter(PluginCatalog::containsJar)
-                    .forEach(directory -> ids.add(directory.getFileName().toString()));
+                    .map(directory -> directory.getFileName().toString())
+                    .collect(Collectors.toCollection(TreeSet::new));
         } catch (IOException e) {
             // A catalog that cannot be listed offers nothing. Requests naming a plugin then fail with the
             // regular "unknown plugin" rejection, which is the same fail-closed outcome as an empty catalog.
             return Set.of();
         }
-        return ids;
     }
 
     /**

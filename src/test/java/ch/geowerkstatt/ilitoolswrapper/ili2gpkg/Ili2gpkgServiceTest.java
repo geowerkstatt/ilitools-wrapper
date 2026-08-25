@@ -286,7 +286,7 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onNext(ConvertRequest.newBuilder()
                 .setInfo(ConvertRequestInfo.newBuilder()
                         .setOperation(ConvertOperation.OPERATION_VALIDATE)
-                        .addPlugins("geow-interlis-functions"))
+                        .addPluginIds("geow-interlis-functions"))
                 .build());
 
         assertNotNull(responseObserver.error());

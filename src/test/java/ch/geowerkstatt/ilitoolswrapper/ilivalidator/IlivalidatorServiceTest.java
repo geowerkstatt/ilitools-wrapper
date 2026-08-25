@@ -491,7 +491,7 @@ public final class IlivalidatorServiceTest {
         // The catalog directory of this test is empty, so no id is on offer.
         requestObserver.onNext(ValidateRequest.newBuilder()
                 .setInfo(ValidateRequestInfo.newBuilder()
-                        .addPlugins("geow-interlis-functions"))
+                        .addPluginIds("geow-interlis-functions"))
                 .build());
 
         assertNotNull(responseObserver.error());

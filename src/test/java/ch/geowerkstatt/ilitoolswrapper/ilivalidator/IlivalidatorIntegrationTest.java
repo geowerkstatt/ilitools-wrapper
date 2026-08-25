@@ -173,7 +173,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
 
         // Same data and models as above, only the plugin selection differs. The plugin function always returns
         // false, so the constraint is evaluated and violated: the inverted success flag proves the plugin ran.
-        call.write(info(info -> info.addModelDirs("%ITF_DIR/models").addPlugins("test-functions")));
+        call.write(info(info -> info.addModelDirs("%ITF_DIR/models").addPluginIds("test-functions")));
         writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_plugin_function.xtf");
         writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_plugin_function.ili");
         writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/TestFunctions.ili");

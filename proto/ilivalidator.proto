@@ -37,7 +37,7 @@ message ValidateRequestInfo {
   bool skipPolygonBuilding = 6;
   repeated string modelDirs = 7;
   string metaConfig = 8;
-  repeated string plugins = 9;
+  repeated string pluginIds = 9;
 }
 
 message ValidateRequest {
