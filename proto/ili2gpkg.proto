@@ -48,6 +48,11 @@ message ConvertRequestInfo {
   string dataset = 11;
   repeated string modelDirs = 12;
   string metaConfig = 13;
+  // Ids of the plugins to load, each offered by the deployment as a folder of the plugin catalog. Named
+  // after what the field carries and not after the tool option: --plugins takes a single folder, which the
+  // wrapper composes from this selection.
+  // Empty means no plugin runs. An id the deployment does not offer is rejected with INVALID_ARGUMENT.
+  repeated string pluginIds = 14;
 }
 
 message ConvertRequest {

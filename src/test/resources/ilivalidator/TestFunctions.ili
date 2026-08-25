@@ -1,0 +1,11 @@
+INTERLIS 2.4;
+
+!! Declares the function the test plugin implements. Only the plugin provides it, so a constraint calling
+!! this function fails when the plugin is loaded and is silently skipped when it is not.
+CONTRACTED MODEL TestFunctions
+  AT "mailto:info@geowerkstatt.ch"
+  VERSION "2026-08-24" =
+
+  FUNCTION AlwaysFalse (Obj: OBJECT OF ANYCLASS): BOOLEAN;
+
+END TestFunctions.

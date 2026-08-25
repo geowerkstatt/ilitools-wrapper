@@ -4,6 +4,7 @@ import ch.geowerkstatt.ilitoolswrapper.RecordingStreamObserver;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryFileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
+import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateRequest;
@@ -16,14 +17,19 @@ import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public final class IlivalidatorServiceTest {
+    @TempDir
+    private Path pluginRoot;
+
     private InMemoryFileManager fileManager;
     private IlitoolsRunnerMock ilitoolsRunner;
     private IlivalidatorService service;
@@ -34,7 +40,7 @@ public final class IlivalidatorServiceTest {
         fileManager = new InMemoryFileManager();
         ilitoolsRunner = new IlitoolsRunnerMock();
         // Private networks are allowed so that the unit tests never depend on name resolution.
-        service = new IlivalidatorService(fileManager, ilitoolsRunner, PrivateNetworkPolicy.ALLOW);
+        service = new IlivalidatorService(fileManager, ilitoolsRunner, PrivateNetworkPolicy.ALLOW, new PluginCatalog(pluginRoot));
         responseObserver = new RecordingStreamObserver<>();
     }
 
@@ -456,6 +462,41 @@ public final class IlivalidatorServiceTest {
 
         assertNotNull(responseObserver.error());
         assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
+    }
+
+    @Test
+    void pluginsAreNotPassedWithoutASelection() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        // Leaving the argument out is what keeps the tool on its own default, which points into the tool
+        // installation and carries no plugin. Measured: the tool logs a plugin folder on every run, so its log
+        // says nothing about whether a plugin was loaded.
+        assertFalse(arguments.args().contains("--plugins"), "Without a selection no plugin directory may be passed.");
+
+        assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
+    }
+
+    @Test
+    void unknownPluginIsRejected() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        // The catalog directory of this test is empty, so no id is on offer.
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .addPluginIds("geow-interlis-functions"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected request.");
         assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
     }
 

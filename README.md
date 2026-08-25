@@ -23,6 +23,7 @@ Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Dock
 | `ILI2GPKG_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ili2gpkg Tools |
 | `ILIVALIDATOR_HOME` | Aus Dockerfile oder Gradle `run` Task | Verzeichnis der ilivalidator Installation |
 | `ILIVALIDATOR_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ilivalidator Tools |
+| `ILITOOLS_PLUGINS_DIR` | nicht gesetzt | Verzeichnis mit einem Unterordner pro angebotenem Plugin. Ohne Angabe bietet das Deployment keine Plugins an (siehe [Plugins zuschalten](#plugins-zuschalten)) |
 | `MODELDIR_ALLOW_PRIVATE_NETWORKS` | `false` | Erlaubt `modelDirs`-URLs, die in nicht öffentliche Adressbereiche auflösen (siehe [Modell-Repositories und Profile](#modell-repositories-und-profile)) |
 
 ## Modell-Repositories und Profile
@@ -86,6 +87,27 @@ Weil der Wrapper die Dateien selbst benennt, kann über diesen Weg kein Reposito
 
 Da jede Quelle ihren eigenen Unterordner hat, ist auch die Kombination mit einem Repository-Archiv vollständig priorisierbar, zum Beispiel `https://models.interlis.ch/;%ITF_DIR/repository;%ITF_DIR/models`: amtliche Repositories vor dem mitgesendeten Repository vor den Lieferanten-Modellen.
 
+## Plugins zuschalten
+
+Ein Plugin stellt benutzerdefinierte Funktionen bereit, die ein Modell in seinen Constraints aufrufen kann. Ohne das passende Plugin lässt sich ein solcher Constraint nicht auswerten.
+
+**Beide Services** haben dafür das optionale Feld `pluginIds` in der `info`-Nachricht. Der Wrapper nimmt keine Jars im Request entgegen, sondern bietet an, was sein Plugin-Verzeichnis enthält (`ILITOOLS_PLUGINS_DIR`, siehe [Konfiguration](#konfiguration)). Das Verzeichnis enthält **einen Unterordner pro Plugin**, dessen Name die Id ist, und darin die Jar-Dateien des Plugins. Ein Unterordner ohne Jar gilt nicht als Plugin. Ob das Verzeichnis ins Image gebacken oder hineingemountet wird, ist eine Deployment-Entscheidung; der Contract kennt nur Ids.
+
+Das Feld `pluginIds` der `info`-Nachricht wählt aus dieser Menge aus. Es heisst nach dem, was es trägt, und nicht nach der Tool-Option: `--plugins` nimmt einen einzelnen Ordner, den der Wrapper aus dieser Auswahl erst zusammenstellt.
+
+| Fall | Verhalten |
+| --- | --- |
+| `pluginIds` leer | `--plugins` wird nicht gesetzt, es läuft kein Plugin |
+| Id ist im Plugin-Verzeichnis vorhanden | Die Jars des Plugins werden ins Session-Verzeichnis kopiert und über `--plugins` geladen |
+| Id ist nicht vorhanden, leer oder doppelt | `INVALID_ARGUMENT`, bevor eine Datei entgegengenommen wird |
+
+Für die Jars im Plugin-Verzeichnis gilt die Regel des Werkzeugs: eine Zusatzfunktion muss das Java-Interface `ch.interlis.iox_j.validator.InterlisFunction` implementieren, **und der Name der Java-Klasse muss mit `IoxPlugin` enden** (dokumentiert in `docs/ilivalidator.html` der Distribution). Eine Klasse mit anderem Namen wird stillschweigend ignoriert und äussert sich als übersprungener Constraint, nicht als Fehler. Der Name der Jar-Datei ist dagegen irrelevant, gesucht wird nach Klassen.
+
+Die Menge wird bei **jedem** Request aus dem Verzeichnis gelesen. Ein neu abgelegtes Plugin ist damit ohne Neustart des Dienstes wählbar. Werden mehrere Plugins gewählt, führt der Wrapper deren Jars in einem Verzeichnis zusammen, weil `--plugins` genau eines annimmt; tragen zwei gewählte Plugins eine Jar-Datei mit demselben Namen, wird der Request abgelehnt.
+
+**Ein fehlendes Plugin fällt nicht auf.** Gemessen an ilivalidator 1.15.0: ruft ein `MANDATORY CONSTRAINT` eine Funktion auf, deren Plugin nicht geladen ist, überspringt das Tool den Constraint mit `Warning: ... is not yet implemented.` und **beendet den Lauf erfolgreich**. Eine Option, die das zum Fehler macht, gibt es nicht. Wer aus dem Validierungsresultat eine Freigabe ableitet, muss die Logs deshalb auf übersprungene Constraints prüfen; der Erfolg allein sagt nicht, dass alle Constraints ausgewertet wurden. Aus demselben Grund ist die Zeile `pluginFolder <...>` im Log kein Nachweis: sie erscheint bei jedem Lauf, auch ohne `--plugins`.
+
+
 ## Ili2gpkg service
 
 Der `Ili2gpkgService` kapselt das Kommandozeilen-Tool `ili2gpkg`, das INTERLIS-Transferdateien und GeoPackage-Datenbanken ineinander umwandelt.
@@ -119,7 +141,7 @@ Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet u
 | `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
 | `OPERATION_VALIDATE` | Validiert die Daten in einem GeoPackage | `DB_FILE` (`.gpkg`) | `XTF_LOG_FILE` (`.xtf`) |
 
-Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig` sowie der optionale Dateityp `REPOSITORY_ARCHIVE` zur Verfügung, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
+Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig` sowie der optionale Dateityp `REPOSITORY_ARCHIVE` zur Verfügung, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile). Zusatzfunktionen aus Plugins lassen sich über `pluginIds` zuschalten, siehe [Plugins zuschalten](#plugins-zuschalten); ili2gpkg kann mit `OPERATION_VALIDATE` ebenfalls validieren und nimmt dieselbe Tool-Option.
 
 ### Ablauf der Antwort
 
@@ -170,7 +192,7 @@ Die folgenden Optionen können in der `info`-Nachricht gesetzt und werden als Ko
 | `multiplicityOff` | `--multiplicityOff` |
 | `skipPolygonBuilding` | `--skipPolygonBuilding` |
 
-Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
+Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile), sowie `pluginIds`, siehe [Plugins zuschalten](#plugins-zuschalten).
 
 ### Ablauf der Antwort
 

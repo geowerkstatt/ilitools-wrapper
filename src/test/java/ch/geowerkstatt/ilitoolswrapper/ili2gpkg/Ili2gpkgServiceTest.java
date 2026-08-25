@@ -4,6 +4,7 @@ import ch.geowerkstatt.ilitoolswrapper.RecordingStreamObserver;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryFileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
+import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
@@ -17,11 +18,13 @@ import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -29,6 +32,9 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.*;
 
 public final class Ili2gpkgServiceTest {
+    @TempDir
+    private Path pluginRoot;
+
     private InMemoryFileManager fileManager;
     private IlitoolsRunnerMock ilitoolsRunner;
     private Ili2gpkgService service;
@@ -39,7 +45,7 @@ public final class Ili2gpkgServiceTest {
         fileManager = new InMemoryFileManager();
         ilitoolsRunner = new IlitoolsRunnerMock();
         // Private networks are allowed so that the unit tests never depend on name resolution.
-        service = new Ili2gpkgService(fileManager, ilitoolsRunner, PrivateNetworkPolicy.ALLOW);
+        service = new Ili2gpkgService(fileManager, ilitoolsRunner, PrivateNetworkPolicy.ALLOW, new PluginCatalog(pluginRoot));
         responseObserver = new RecordingStreamObserver<>();
     }
 
@@ -264,6 +270,23 @@ public final class Ili2gpkgServiceTest {
                 .setInfo(ConvertRequestInfo.newBuilder()
                         .setOperation(ConvertOperation.OPERATION_SCHEMA_IMPORT)
                         .addModelDirs("%ITF_DIR"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
+    }
+
+    @Test
+    void unknownPluginIsRejected() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        // The catalog directory of this test is empty, so no id is on offer. ili2gpkg takes the same --plugins
+        // option as ilivalidator and can validate, so the selection has to work here too.
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_VALIDATE)
+                        .addPluginIds("geow-interlis-functions"))
                 .build());
 
         assertNotNull(responseObserver.error());

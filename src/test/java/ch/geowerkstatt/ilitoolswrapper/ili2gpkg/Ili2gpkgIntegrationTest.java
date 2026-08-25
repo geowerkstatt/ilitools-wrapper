@@ -4,6 +4,7 @@ import ch.geowerkstatt.ilitoolswrapper.IlitoolsIntegrationTestBase;
 import ch.geowerkstatt.ilitoolswrapper.IntegrationTestSupport;
 import ch.geowerkstatt.ilitoolswrapper.files.FilesystemFileManager;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
+import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
@@ -59,7 +60,7 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
     @Override
     protected BindableService createService() {
         // Private networks are allowed so that the tests stay independent of name resolution.
-        return new Ili2gpkgService(new FilesystemFileManager(), new IlitoolsProcessRunner(), PrivateNetworkPolicy.ALLOW);
+        return new Ili2gpkgService(new FilesystemFileManager(), new IlitoolsProcessRunner(), PrivateNetworkPolicy.ALLOW, new PluginCatalog(Path.of(Objects.requireNonNull(System.getenv("TEST_PLUGIN_CATALOG"), "The test task must set TEST_PLUGIN_CATALOG."))));
     }
 
     @Test

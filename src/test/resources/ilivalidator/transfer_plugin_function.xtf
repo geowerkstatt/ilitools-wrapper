@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ili:transfer xmlns:ili="http://www.interlis.ch/xtf/2.4/INTERLIS"
+  xmlns="http://www.interlis.ch/xtf/2.4/PluginFunctionModel">
+  <ili:headersection>
+    <ili:models>
+      <ili:model>PluginFunctionModel</ili:model>
+    </ili:models>
+    <ili:sender>ilitools-wrapper</ili:sender>
+  </ili:headersection>
+  <ili:datasection>
+    <Testdata ili:bid="b1a2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d">
+      <ClassA ili:tid="11111111-1111-4111-8111-111111111111">
+        <Name>Alpha</Name>
+      </ClassA>
+    </Testdata>
+  </ili:datasection>
+</ili:transfer>
