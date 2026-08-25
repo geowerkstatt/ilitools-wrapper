@@ -470,7 +470,7 @@ public final class IlivalidatorServiceTest {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(info());
-        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
         requestObserver.onNext(chunk("data"));
         requestObserver.onCompleted();
 
