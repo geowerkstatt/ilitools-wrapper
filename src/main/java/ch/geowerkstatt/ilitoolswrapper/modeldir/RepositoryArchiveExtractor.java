@@ -16,14 +16,21 @@ import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 
 /**
- * Materializes an INTERLIS model repository that a client sent as a ZIP archive into the session directory of the
- * request, where the tool placeholders {@code %ITF_DIR} and {@code %XTF_DIR} resolve to it.
+ * Materializes an INTERLIS model repository that a client sent as a ZIP archive into its own subfolder of the
+ * session directory, where a model dir entry of the form {@code %ITF_DIR/repository} respectively
+ * {@code %XTF_DIR/repository} resolves to it.
  *
  * <p>The threat model treats the calling instance as possibly compromised, so entry paths are confined to the target
  * directory (Zip Slip) and the extraction is bounded by an entry count and by the total extracted size (archive
  * bombs). Every violation is an {@link IllegalArgumentException}, which the services map to {@code INVALID_ARGUMENT}.
  */
 public final class RepositoryArchiveExtractor {
+    /**
+     * Name of the session subfolder a received archive is extracted into, addressed as
+     * {@code %ITF_DIR/repository} respectively {@code %XTF_DIR/repository} in the model dirs.
+     */
+    public static final String REPOSITORY_SUBFOLDER = "repository";
+
     private static final int DEFAULT_MAX_ENTRIES = 2000;
     private static final long DEFAULT_MAX_UNCOMPRESSED_BYTES = 64L * 1024 * 1024;
     private static final int COPY_BUFFER_SIZE = 8192;
@@ -51,8 +58,9 @@ public final class RepositoryArchiveExtractor {
 
     /**
      * Extracts the repository archive a request carried, if it carried one. The archive is extracted into the
-     * directory it was received in, which is the session directory of the request and what the tool placeholders
-     * {@code %ITF_DIR} and {@code %XTF_DIR} expand to.
+     * subfolder {@value #REPOSITORY_SUBFOLDER} of the directory it was received in, so a model dir entry can
+     * address the repository on its own ({@code %ITF_DIR/repository} respectively {@code %XTF_DIR/repository})
+     * and rank it against the other sources of the session.
      *
      * @param archiveFiles the received files of the repository archive type, empty when the request carried none
      * @throws IllegalArgumentException if more than one archive was sent, or for any reason
@@ -73,14 +81,14 @@ public final class RepositoryArchiveExtractor {
             throw new IOException("The repository archive " + archive + " is not inside a session directory.");
         }
 
-        extract(archive, sessionDirectory);
+        extract(archive, sessionDirectory.resolve(REPOSITORY_SUBFOLDER));
     }
 
     /**
      * Extracts every entry of the archive into the target directory, keeping the directory structure of the archive.
      *
      * @param archive the ZIP archive to read
-     * @param targetDirectory the directory the entries are written to, the session directory of the request
+     * @param targetDirectory the directory the entries are written to, confined against escaping entries
      * @throws IllegalArgumentException if the archive cannot be read as a ZIP archive, an entry escapes the target
      *     directory, an entry would replace an existing file, or a limit is exceeded
      * @throws IOException if reading the archive or writing an entry fails
@@ -114,7 +122,7 @@ public final class RepositoryArchiveExtractor {
 
     private long extractEntry(ZipFile zipFile, ZipEntry entry, Path target, long remainingBytes) throws IOException {
         if (Files.exists(target)) {
-            throw new IllegalArgumentException("Repository archive entry \"" + entry.getName() + "\" would replace a file that already exists in the session directory.");
+            throw new IllegalArgumentException("Repository archive entry \"" + entry.getName() + "\" would replace a file that already exists in the extracted repository.");
         }
 
         Path parent = target.getParent();
@@ -156,7 +164,7 @@ public final class RepositoryArchiveExtractor {
         }
 
         if (!target.startsWith(root)) {
-            throw new IllegalArgumentException("Repository archive entry \"" + entryName + "\" would be written outside the session directory.");
+            throw new IllegalArgumentException("Repository archive entry \"" + entryName + "\" would be written outside the repository folder.");
         }
         return target;
     }

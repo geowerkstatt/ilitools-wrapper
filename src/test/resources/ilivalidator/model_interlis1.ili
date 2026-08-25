@@ -1,0 +1,30 @@
+TRANSFER SimpleModel1;
+
+!! Minimal INTERLIS 1 test model. Legacy syntax on purpose: it covers the
+!! "ITF with delivered INTERLIS 1 model" use case of geopilot#683. Two tables,
+!! because reusing a TID across tables is legal in ITF and only validates when
+!! the tool sees the .itf extension.
+MODEL SimpleModel1
+
+  TOPIC TopicA =
+
+    TABLE TableA =
+      Name: TEXT*30;
+    NO IDENT
+    END TableA;
+
+    TABLE TableB =
+      Name: TEXT*30;
+    NO IDENT
+    END TableB;
+
+  END TopicA.
+
+END SimpleModel1.
+
+FORMAT FREE;
+
+CODE
+  BLANK = DEFAULT, UNDEFINED = DEFAULT, CONTINUE = DEFAULT;
+  TID = ANY;
+END.

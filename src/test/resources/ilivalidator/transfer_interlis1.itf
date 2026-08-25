@@ -1,0 +1,16 @@
+SCNT
+Minimal INTERLIS 1 test data for SimpleModel1. Both tables reuse TID 1,
+which is legal in ITF and pins that the declared itf extension reaches the tool.
+////
+MTID INTERLIS1
+MODL SimpleModel1
+TOPI TopicA
+TABL TableA
+OBJE 1 Alpha
+ETAB
+TABL TableB
+OBJE 1 Beta
+ETAB
+ETOP
+EMOD
+ENDE

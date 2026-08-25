@@ -36,6 +36,9 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     // %ITF_DIR is the directory of the transfer file, which is the session directory of the request.
     private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%ITF_DIR");
 
+    // Session subfolder for received MODEL_FILEs, addressed as %ITF_DIR/models in the model dirs.
+    private static final String MODEL_FILES_SUBFOLDER = "models";
+
     private static final Logger LOGGER = Logger.getLogger(IlivalidatorService.class.getName());
     private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
     private final FileManager fileManager;
@@ -132,9 +135,13 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 return;
             }
             IlivalidatorFileType type = fileStart.getType();
+            // The transfer file type carries the format, because the tool switches to its INTERLIS 1 semantics
+            // only for an .itf name (measured: per-table TIDs of an ITF are rejected under an .xtf name).
             String extension = switch (type) {
-                case TRANSFER_FILE -> "xtf";
+                case TRANSFER_FILE_XTF -> "xtf";
+                case TRANSFER_FILE_ITF -> "itf";
                 case REPOSITORY_ARCHIVE -> "zip";
+                case MODEL_FILE -> "ili";
                 default -> null;
             };
             if (extension == null) {
@@ -145,7 +152,12 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
 
             try {
                 int fileNumber = files.size() + 1;
-                currentFile = files.create(type, "file" + fileNumber, extension);
+                String fileName = "file" + fileNumber;
+                // Model files get their own subfolder, so a model dir entry can address exactly them
+                // (%ITF_DIR/models) and rank them against the other sources.
+                currentFile = type == IlivalidatorFileType.MODEL_FILE
+                        ? files.create(type, MODEL_FILES_SUBFOLDER, fileName, extension)
+                        : files.create(type, fileName, extension);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
@@ -230,8 +242,9 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             files.deleteAll();
         }
 
-        // Runs after the received files are closed and before the log files exist, so a colliding archive entry can
-        // only hit a file the caller sent itself. Returns false when the request was cancelled.
+        // Runs after the received files are closed and before the log files exist. The archive lands in its own
+        // subfolder, so its entries cannot collide with any other file of the session. Returns false when the
+        // request was cancelled.
         private boolean extractRepositoryArchive() {
             try {
                 REPOSITORY_ARCHIVE_EXTRACTOR.extractReceived(files.getAll(IlivalidatorFileType.REPOSITORY_ARCHIVE));
@@ -250,7 +263,12 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         // Exactly one transfer file is what makes a validate request runnable, so the optional of the file set carries
         // straight through to the optional of the arguments.
         private Optional<List<String>> validateRequestToArguments() {
-            return files.getSingle(IlivalidatorFileType.TRANSFER_FILE).map(this::buildValidateArguments);
+            List<ProcessingFile> transferFiles = new ArrayList<>(files.getAll(IlivalidatorFileType.TRANSFER_FILE_XTF));
+            transferFiles.addAll(files.getAll(IlivalidatorFileType.TRANSFER_FILE_ITF));
+            if (transferFiles.size() != 1) {
+                return Optional.empty();
+            }
+            return Optional.of(buildValidateArguments(transferFiles.getFirst()));
         }
 
         private List<String> buildValidateArguments(ProcessingFile transferFile) {

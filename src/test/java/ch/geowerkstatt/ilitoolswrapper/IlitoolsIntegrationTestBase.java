@@ -40,7 +40,7 @@ public abstract class IlitoolsIntegrationTestBase {
     /**
      * Creates the service under test. Called once before the server starts.
      */
-    protected abstract BindableService createService() throws IOException;
+    protected abstract BindableService createService();
 
     @BeforeAll
     protected final void startServer() throws IOException {

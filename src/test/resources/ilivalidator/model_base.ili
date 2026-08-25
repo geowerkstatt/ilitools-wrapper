@@ -1,0 +1,10 @@
+INTERLIS 2.4;
+
+MODEL BaseModel
+  AT "mailto:info@geowerkstatt.ch"
+  VERSION "2026-08-21" =
+
+  DOMAIN
+    ShortText = TEXT*10;
+
+END BaseModel.

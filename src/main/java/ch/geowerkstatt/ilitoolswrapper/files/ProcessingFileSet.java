@@ -48,6 +48,23 @@ public final class ProcessingFileSet<F extends Enum<F>> {
     }
 
     /**
+     * Creates a temporary file of the given type in a subfolder of the session directory and registers it in the
+     * set. Subfolders keep files of different provenance apart, so a model dir entry can address one of them.
+     *
+     * @param type the type the file is grouped under
+     * @param subfolder the folder below the session directory, a plain folder name decided by the calling service
+     * @param fileName the file name without extension
+     * @param extension the file extension without the leading dot
+     * @return the created {@link ProcessingFile}
+     * @throws IllegalArgumentException if {@code extension} is invalid
+     */
+    public ProcessingFile create(F type, String subfolder, String fileName, String extension) {
+        ProcessingFile file = fileManager.createProcessingFile(sessionId + "/" + subfolder, fileName, extension);
+        files.computeIfAbsent(type, _ -> new ArrayList<>()).add(file);
+        return file;
+    }
+
+    /**
      * Returns the single file registered for the given type, or an empty optional if there is no file or more
      * than one file of that type. Callers that have to tell those two cases apart use {@link #getAll} instead.
      *

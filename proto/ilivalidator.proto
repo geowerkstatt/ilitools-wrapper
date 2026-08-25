@@ -14,10 +14,14 @@ service IlivalidatorService {
 }
 
 enum IlivalidatorFileType {
-  TRANSFER_FILE = 0;
+  TRANSFER_FILE_XTF = 0;
   LOG_FILE = 1;
   XTF_LOG_FILE = 2;
   REPOSITORY_ARCHIVE = 3;
+  MODEL_FILE = 4;
+  // The tool switches to its INTERLIS 1 semantics only for a transfer file ending in .itf,
+  // so the type of the transfer file carries the format.
+  TRANSFER_FILE_ITF = 5;
 }
 
 message IlivalidatorFileStart {
