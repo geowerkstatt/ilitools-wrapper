@@ -21,7 +21,7 @@ RUN set -eu; \
     for version in $(echo "${ILI2GPKG_VERSION} ${ILI2GPKG_ADDITIONAL_VERSIONS}" | tr ',' ' '); do \
       curl -fsSL -o /tmp/ili2gpkg.zip "https://downloads.interlis.ch/ili2gpkg/ili2gpkg-${version}.zip"; \
       mkdir -p "/opt/ili2gpkg/${version}"; \
-      unzip -q /tmp/ili2gpkg.zip -d "/opt/ili2gpkg/${version}"; \
+      unzip -qo /tmp/ili2gpkg.zip -d "/opt/ili2gpkg/${version}"; \
       rm /tmp/ili2gpkg.zip; \
     done
 
@@ -29,7 +29,7 @@ RUN set -eu; \
     for version in $(echo "${ILIVALIDATOR_VERSION} ${ILIVALIDATOR_ADDITIONAL_VERSIONS}" | tr ',' ' '); do \
       curl -fsSL -o /tmp/ilivalidator.zip "https://downloads.interlis.ch/ilivalidator/ilivalidator-${version}.zip"; \
       mkdir -p "/opt/ilivalidator/${version}"; \
-      unzip -q /tmp/ilivalidator.zip -d "/opt/ilivalidator/${version}"; \
+      unzip -qo /tmp/ilivalidator.zip -d "/opt/ilivalidator/${version}"; \
       rm /tmp/ilivalidator.zip; \
     done
 

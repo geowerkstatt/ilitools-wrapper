@@ -11,7 +11,7 @@ Der ilitools-wrapper stellt verschiedene INTERLIS Tools als gRPC-Server zur Verf
 
 Java 25 (LTS) oder neuer wird benötigt, um den `ilitools-wrapper` auszuführen.
 
-Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Docker Images wird automatisch eine Version von ili2gpkg heruntergeladen und konfiguriert.
+Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Docker Images werden automatisch die konfigurierten Versionen von ili2gpkg und ilivalidator heruntergeladen und konfiguriert.
 
 ## Konfiguration
 

@@ -58,6 +58,9 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         Set<String> scanned = scanVersions(tool);
         if (!scanned.isEmpty()) {
             versionsByTool.put(tool, scanned);
+            // Logged once, at first scan (e.g. the startup health check): each deployment then names its
+            // offered versions in its own log without extra tooling.
+            LOGGER.info(tool + " offers versions " + scanned + ".");
         }
         return scanned;
     }
@@ -127,6 +130,12 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         // the backstop for callers that do not).
         Set<String> available = availableVersions(tool);
         if (!available.contains(version)) {
+            // An empty set means the home itself is missing or wrong, so name that cause instead of the
+            // versions; requireEnvironmentVariable restores the precise message for an unset variable.
+            if (available.isEmpty()) {
+                throw new IllegalStateException(tool + " offers no versions below " + requireEnvironmentVariable(tool + "_HOME") + ".");
+            }
+
             // A non-empty (caller-requested) version that is not offered is the caller's fault, which the
             // services map to INVALID_ARGUMENT; an unavailable default is a deployment fault instead.
             String message = tool + " version " + version + " is not available, expected one of " + available + ".";

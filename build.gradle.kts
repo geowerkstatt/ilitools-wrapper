@@ -96,12 +96,13 @@ tasks.test {
 
 val ili2gpkgVersion = providers.gradleProperty("ili2gpkgVersion")
 val ilivalidatorVersion = providers.gradleProperty("ilivalidatorVersion")
-// The offered set is the default plus the comma-separated additional versions; the default stays first.
+// The offered set is the default plus the comma- or whitespace-separated additional versions; the default
+// stays first. Whitespace is also accepted so a Dockerfile ARG value (space separated) works unchanged here.
 val ili2gpkgVersions = ili2gpkgVersion.zip(providers.gradleProperty("ili2gpkgAdditionalVersions").orElse("")) { default, additional ->
-    listOf(default) + additional.split(',').map(String::trim).filter(String::isNotEmpty)
+    listOf(default) + additional.split(Regex("[,\\s]+")).map(String::trim).filter(String::isNotEmpty)
 }
 val ilivalidatorVersions = ilivalidatorVersion.zip(providers.gradleProperty("ilivalidatorAdditionalVersions").orElse("")) { default, additional ->
-    listOf(default) + additional.split(',').map(String::trim).filter(String::isNotEmpty)
+    listOf(default) + additional.split(Regex("[,\\s]+")).map(String::trim).filter(String::isNotEmpty)
 }
 val ilitoolsHome = layout.projectDirectory.dir("ilitools")
 val ili2gpkgHome = ilitoolsHome.dir("ili2gpkg")
