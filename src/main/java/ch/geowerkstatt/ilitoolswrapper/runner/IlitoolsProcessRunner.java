@@ -35,8 +35,13 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
 
     @Override
     public CompletableFuture<Void> run(Tool tool, String toolVersion, List<String> args, @Nullable Timeout timeout) throws IOException {
+        // Resolved and validated once, up front: buildCommand/findTool then only ever see an already-valid
+        // version, the cache is keyed by that effective version (no duplicate entry for the default), and
+        // every failure message below names the version that actually ran.
+        String version = resolveVersion(tool, toolVersion);
+
         ProcessBuilder processBuilder = new ProcessBuilder();
-        processBuilder.command(buildCommand(tool, toolVersion, args));
+        processBuilder.command(buildCommand(tool, version, args));
         processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
         processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD);
 
@@ -45,7 +50,7 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         if (timeout != null) {
             processFuture = processFuture.completeOnTimeout(process, timeout.duration(), timeout.unit());
         }
-        return processFuture.thenCompose(p -> handleProcessResult(p, tool, toolVersion));
+        return processFuture.thenCompose(p -> handleProcessResult(p, tool, version));
     }
 
     @Override
@@ -65,28 +70,47 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         return scanned;
     }
 
-    private CompletionStage<Void> handleProcessResult(Process process, Tool tool, String toolVersion) {
-        // Included so two offered versions of the same tool stay distinguishable in logs.
-        String toolLabel = tool + (toolVersion.isEmpty() ? "" : " " + toolVersion);
+    // Matching the scanned set is what turns the version into a path: a request value never builds a path
+    // before it matched a real directory name (the services check the same set in onInfo, this is the
+    // backstop for callers that do not). Resolving and validating here, before the cache, is also what keeps
+    // the caller/default distinction available: buildCommand and findTool only ever see an already-valid version.
+    private String resolveVersion(Tool tool, String toolVersion) {
+        Set<String> available = availableVersions(tool);
+        if (available.isEmpty()) {
+            // An empty set means the home itself is missing or wrong, so name that cause instead of the
+            // versions; requireEnvironmentVariable restores the precise message for an unset variable.
+            throw new IllegalStateException(tool + " offers no versions below " + requireEnvironmentVariable(tool + "_HOME") + ".");
+        }
 
+        String version = toolVersion.isEmpty() ? requireEnvironmentVariable(tool + "_VERSION") : toolVersion;
+        if (!available.contains(version)) {
+            // A non-empty (caller-requested) version that is not offered is the caller's fault, which the
+            // services map to INVALID_ARGUMENT; an unavailable default is a deployment fault instead.
+            String message = tool + " version " + version + " is not available, expected one of " + available + ".";
+            throw toolVersion.isEmpty() ? new IllegalStateException(message) : new IllegalArgumentException(message);
+        }
+        return version;
+    }
+
+    private CompletionStage<Void> handleProcessResult(Process process, Tool tool, String version) {
         if (process.isAlive()) {
             process.destroyForcibly();
-            return CompletableFuture.failedStage(new TimeoutException("Tool " + toolLabel + " timed out."));
+            return CompletableFuture.failedStage(new TimeoutException("Tool " + tool + " " + version + " timed out."));
         }
 
         if (process.exitValue() != 0) {
-            String errorMessage = "Tool " + toolLabel + " exited with code " + process.exitValue();
+            String errorMessage = "Tool " + tool + " " + version + " exited with code " + process.exitValue();
             return CompletableFuture.failedStage(new RuntimeException(errorMessage));
         }
 
         return CompletableFuture.completedStage(null);
     }
 
-    private List<String> buildCommand(Tool tool, String toolVersion, List<String> args) {
+    private List<String> buildCommand(Tool tool, String version, List<String> args) {
         List<String> command = new ArrayList<>();
         command.add("java");
         command.add("-jar");
-        command.add(toolPaths.computeIfAbsent(new ToolVersion(tool, toolVersion), this::findTool));
+        command.add(toolPaths.computeIfAbsent(new ToolVersion(tool, version), this::findTool));
         command.addAll(args);
         return command;
     }
@@ -121,26 +145,7 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
 
     private String findTool(ToolVersion toolVersion) {
         Tool tool = toolVersion.tool();
-        String version = toolVersion.version().isEmpty()
-                ? requireEnvironmentVariable(tool + "_VERSION")
-                : toolVersion.version();
-
-        // Matching the scanned set is what turns the version into a path: a request value never builds a
-        // path before it matched a real directory name (the services check the same set in onInfo, this is
-        // the backstop for callers that do not).
-        Set<String> available = availableVersions(tool);
-        if (!available.contains(version)) {
-            // An empty set means the home itself is missing or wrong, so name that cause instead of the
-            // versions; requireEnvironmentVariable restores the precise message for an unset variable.
-            if (available.isEmpty()) {
-                throw new IllegalStateException(tool + " offers no versions below " + requireEnvironmentVariable(tool + "_HOME") + ".");
-            }
-
-            // A non-empty (caller-requested) version that is not offered is the caller's fault, which the
-            // services map to INVALID_ARGUMENT; an unavailable default is a deployment fault instead.
-            String message = tool + " version " + version + " is not available, expected one of " + available + ".";
-            throw toolVersion.version().isEmpty() ? new IllegalStateException(message) : new IllegalArgumentException(message);
-        }
+        String version = toolVersion.version();
 
         String toolHome = requireEnvironmentVariable(tool + "_HOME");
         Path toolPath = Path.of(toolHome, version, jarName(tool, version)).toAbsolutePath();
