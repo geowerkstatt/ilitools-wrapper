@@ -109,11 +109,11 @@ Die Menge wird bei **jedem** Request aus dem Verzeichnis gelesen. Ein neu abgele
 
 ## Werkzeug-Version wählen
 
-Der Wrapper bringt pro Werkzeug eine oder mehrere Versionen mit, je Version ein Unterordner von `{TOOL}_HOME` (etwa `/opt/ilivalidator/1.15.0`). Das optionale Feld `toolVersion` der `info`-Nachricht wählt eine davon. Leer gilt die Voreinstellung aus `{TOOL}_VERSION`; eine Version, die das Image nicht mitbringt, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei übertragen wird.
+Der Wrapper bringt pro Werkzeug eine oder mehrere Versionen mit, je Version ein Unterordner von `{TOOL}_HOME` (etwa `/opt/ilivalidator/1.15.0`). Das optionale Feld `toolVersion` der `info`-Nachricht wählt eine davon. Ist das Feld leer, gilt die Voreinstellung aus `{TOOL}_VERSION`; eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird.
 
-Die Voreinstellung ist bewusst von der neusten Version entkoppelt: so lässt sich eine neue Version anbieten, ohne dass sie ohne Zutun greift, etwa weil sie experimentell ist. Welche Version tatsächlich lief, steht im Log-Kopf des Werkzeugs (`ilivalidator-1.15.0-...`), eine Lieferung trägt den Nachweis also mit.
+Die Voreinstellung ist bewusst von der neusten Version entkoppelt: so lässt sich eine neue Version anbieten, ohne dass sie automatisch greift, etwa weil sie experimentell ist. Welche Version tatsächlich lief, steht im Log-Kopf des Werkzeugs (`ilivalidator-1.15.0-...`); eine Lieferung trägt den Nachweis also mit.
 
-Die angebotene Menge bestimmt das Image: die Build-Argumente `ILI2GPKG_ADDITIONAL_VERSIONS` / `ILIVALIDATOR_ADDITIONAL_VERSIONS` (Leerzeichen- oder Komma-getrennt) ergänzen die Voreinstellung; für die lokale Entwicklung entsprechen dem `ili2gpkgAdditionalVersions` / `ilivalidatorAdditionalVersions` (Komma-getrennt) in `gradle.properties`. Die Menge klein halten, etwa aktuell plus Vorgänger: die Request-Felder bilden auf die Optionen einer Version ab, und eine zu alte Version scheitert an einer unbekannten Option im Werkzeug statt an unserer Prüfung.
+Die angebotene Menge bestimmt das Deployment: die Build-Argumente `ILI2GPKG_ADDITIONAL_VERSIONS` / `ILIVALIDATOR_ADDITIONAL_VERSIONS` (Leerzeichen- oder Komma-getrennt) des Docker-Images ergänzen die Voreinstellung; für die lokale Entwicklung entsprechen ihnen `ili2gpkgAdditionalVersions` / `ilivalidatorAdditionalVersions` (Komma-getrennt) in `gradle.properties`. Die Menge klein halten, etwa aktuell plus Vorgänger: die Request-Felder bilden auf die Optionen einer Version ab, und eine zu alte Version scheitert an einer unbekannten Option im Werkzeug statt an unserer Prüfung.
 
 ## Ili2gpkg service
 
@@ -152,7 +152,7 @@ Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig`
 
 | Feld | Beschreibung |
 | --- | --- |
-| `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird |
+| `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. |
 
 ### Ablauf der Antwort
 
@@ -207,7 +207,7 @@ Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile
 
 | Feld | Beschreibung |
 | --- | --- |
-| `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird |
+| `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. |
 
 ### Ablauf der Antwort
 
