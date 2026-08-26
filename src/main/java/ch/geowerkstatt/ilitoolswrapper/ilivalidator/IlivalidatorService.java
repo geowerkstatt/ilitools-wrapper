@@ -135,6 +135,10 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 LOGGER.warning("Rejected request options: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
                 return;
+            } catch (IllegalStateException e) {
+                LOGGER.severe("Rejected request options: " + e.getMessage());
+                cancelWithError(Status.ABORTED.withDescription(e.getMessage()));
+                return;
             }
 
             this.info = info;
@@ -350,6 +354,11 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             }
 
             Set<String> availableVersions = ilitoolsRunner.availableVersions(IlitoolsRunner.Tool.ILIVALIDATOR);
+            if (availableVersions.isEmpty()) {
+                // An empty set means the tool home itself is missing or wrong: a deployment fault, not a
+                // request fault, so it must not surface as INVALID_ARGUMENT.
+                throw new IllegalStateException("No " + IlitoolsRunner.Tool.ILIVALIDATOR + " versions are offered; the deployment is misconfigured.");
+            }
             if (!availableVersions.contains(toolVersion)) {
                 throw new IllegalArgumentException("Tool version \"" + toolVersion + "\" is not available, expected one of " + availableVersions + ".");
             }

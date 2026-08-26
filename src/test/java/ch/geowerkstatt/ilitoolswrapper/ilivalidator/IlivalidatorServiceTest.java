@@ -542,6 +542,23 @@ public final class IlivalidatorServiceTest {
     }
 
     @Test
+    void toolVersionWithoutAnyOfferedVersionIsAServerFault() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        // The mock offers no versions, mirroring a missing or unreadable tool home. That is a deployment
+        // fault, so the client must see ABORTED and not an INVALID_ARGUMENT it cannot fix.
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setToolVersion("1.15.0"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.ABORTED, statusCodeOf(responseObserver.error()));
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected request.");
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
+    }
+
+    @Test
     void requestedToolVersionIsPassedToTheRunner() {
         ilitoolsRunner.offerVersions("1.15.0", "1.14.4");
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);

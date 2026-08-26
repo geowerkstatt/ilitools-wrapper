@@ -139,6 +139,10 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 LOGGER.warning("Rejected request options: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
                 return;
+            } catch (IllegalStateException e) {
+                LOGGER.severe("Rejected request options: " + e.getMessage());
+                cancelWithError(Status.ABORTED.withDescription(e.getMessage()));
+                return;
             }
 
             this.info = info;
@@ -412,6 +416,11 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
 
             Set<String> availableVersions = ilitoolsRunner.availableVersions(IlitoolsRunner.Tool.ILI2GPKG);
+            if (availableVersions.isEmpty()) {
+                // An empty set means the tool home itself is missing or wrong: a deployment fault, not a
+                // request fault, so it must not surface as INVALID_ARGUMENT.
+                throw new IllegalStateException("No " + IlitoolsRunner.Tool.ILI2GPKG + " versions are offered; the deployment is misconfigured.");
+            }
             if (!availableVersions.contains(toolVersion)) {
                 throw new IllegalArgumentException("Tool version \"" + toolVersion + "\" is not available, expected one of " + availableVersions + ".");
             }

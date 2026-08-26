@@ -527,6 +527,23 @@ public final class Ili2gpkgServiceTest {
     }
 
     @Test
+    void toolVersionWithoutAnyOfferedVersionIsAServerFault() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        // The mock offers no versions, mirroring a missing or unreadable tool home. That is a deployment
+        // fault, so the client must see ABORTED and not an INVALID_ARGUMENT it cannot fix.
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setToolVersion("5.5.2"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.ABORTED, statusCodeOf(responseObserver.error()));
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected request.");
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
+    }
+
+    @Test
     void requestedToolVersionIsPassedToTheRunner() {
         ilitoolsRunner.offerVersions("5.5.2", "5.4.0");
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
