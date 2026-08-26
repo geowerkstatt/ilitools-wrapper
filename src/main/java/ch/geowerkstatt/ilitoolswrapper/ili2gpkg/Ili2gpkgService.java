@@ -77,7 +77,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     public HealthCheckResponse.ServingStatus getHealthStatus() {
         try {
             IlitoolsRunner.Timeout timeout = new IlitoolsRunner.Timeout(5, TimeUnit.SECONDS);
-            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, List.of("--version"), timeout).get();
+            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, "", List.of("--version"), timeout).get();
             return HealthCheckResponse.ServingStatus.SERVING;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -234,7 +234,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
 
                 ProcessingArguments processingArguments = parsedArguments.get();
-                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, processingArguments.arguments(), null)
+                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, "", processingArguments.arguments(), null)
                         .handleAsync((_, throwable) -> {
                             if (throwable != null) {
                                 LOGGER.warning("Processing data with ili2gpkg failed: " + throwable);

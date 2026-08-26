@@ -4,19 +4,28 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 
 public final class IlitoolsRunnerMock implements IlitoolsRunner {
-    public record Arguments(Tool tool, List<String> args, @Nullable Timeout timeout) { }
+    public record Arguments(Tool tool, String toolVersion, List<String> args, @Nullable Timeout timeout) { }
 
     private @Nullable Arguments lastArguments;
     private @Nullable Exception exception;
+    private Set<String> availableVersions = Set.of();
 
     @Override
     @NonNull
-    public CompletableFuture<Void> run(@NonNull Tool tool, @NonNull List<String> args, @Nullable Timeout timeout) {
-        lastArguments = new Arguments(tool, List.copyOf(args), timeout);
+    public CompletableFuture<Void> run(@NonNull Tool tool, @NonNull String toolVersion, @NonNull List<String> args, @Nullable Timeout timeout) {
+        lastArguments = new Arguments(tool, toolVersion, List.copyOf(args), timeout);
         return exception == null ? CompletableFuture.completedFuture(null) : CompletableFuture.failedFuture(exception);
+    }
+
+    @Override
+    @NonNull
+    public Set<String> availableVersions(@NonNull Tool tool) {
+        return availableVersions;
     }
 
     /**
@@ -35,5 +44,14 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
      */
     public void failRunWith(Exception exception) {
         this.exception = exception;
+    }
+
+    /**
+     * Configures the versions {@link #availableVersions} offers, for any tool.
+     *
+     * @param versions the versions to offer
+     */
+    public void offerVersions(String... versions) {
+        this.availableVersions = new TreeSet<>(List.of(versions));
     }
 }

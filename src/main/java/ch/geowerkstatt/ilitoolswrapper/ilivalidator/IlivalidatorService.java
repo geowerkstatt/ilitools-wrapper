@@ -73,7 +73,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     public HealthCheckResponse.ServingStatus getHealthStatus() {
         try {
             IlitoolsRunner.Timeout timeout = new IlitoolsRunner.Timeout(5, TimeUnit.SECONDS);
-            ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, List.of("--version"), timeout).get();
+            ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, "", List.of("--version"), timeout).get();
             return HealthCheckResponse.ServingStatus.SERVING;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -231,7 +231,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                     return;
                 }
 
-                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, parsedArguments.get(), null)
+                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, "", parsedArguments.get(), null)
                         .handleAsync((_, throwable) -> {
                             if (throwable != null) {
                                 LOGGER.warning("Validating data with ilivalidator failed: " + throwable);
