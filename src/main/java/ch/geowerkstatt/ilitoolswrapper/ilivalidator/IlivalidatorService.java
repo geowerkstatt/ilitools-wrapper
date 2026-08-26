@@ -73,7 +73,13 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     public HealthCheckResponse.ServingStatus getHealthStatus() {
         try {
             IlitoolsRunner.Timeout timeout = new IlitoolsRunner.Timeout(5, TimeUnit.SECONDS);
+            // The empty string probes the deployment default including its membership in the offered set;
+            // every offered version is probed as well, so a defective additional jar surfaces here instead
+            // of masquerading as a failed validation of some client's data.
             ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, "", List.of("--version"), timeout).get();
+            for (String version : ilitoolsRunner.availableVersions(IlitoolsRunner.Tool.ILIVALIDATOR)) {
+                ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, version, List.of("--version"), timeout).get();
+            }
             return HealthCheckResponse.ServingStatus.SERVING;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

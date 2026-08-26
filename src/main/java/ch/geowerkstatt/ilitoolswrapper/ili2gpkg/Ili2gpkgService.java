@@ -77,7 +77,13 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     public HealthCheckResponse.ServingStatus getHealthStatus() {
         try {
             IlitoolsRunner.Timeout timeout = new IlitoolsRunner.Timeout(5, TimeUnit.SECONDS);
+            // The empty string probes the deployment default including its membership in the offered set;
+            // every offered version is probed as well, so a defective additional jar surfaces here instead
+            // of masquerading as a failed validation of some client's data.
             ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, "", List.of("--version"), timeout).get();
+            for (String version : ilitoolsRunner.availableVersions(IlitoolsRunner.Tool.ILI2GPKG)) {
+                ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, version, List.of("--version"), timeout).get();
+            }
             return HealthCheckResponse.ServingStatus.SERVING;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

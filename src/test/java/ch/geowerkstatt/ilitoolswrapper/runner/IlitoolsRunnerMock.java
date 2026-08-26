@@ -3,6 +3,7 @@ package ch.geowerkstatt.ilitoolswrapper.runner;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -12,6 +13,7 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     public record Arguments(Tool tool, String toolVersion, List<String> args, @Nullable Timeout timeout) { }
 
     private @Nullable Arguments lastArguments;
+    private final List<Arguments> allArguments = new ArrayList<>();
     private @Nullable Exception exception;
     private Set<String> availableVersions = Set.of();
     private @Nullable Tool versionsQueriedFor;
@@ -20,6 +22,7 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     @NonNull
     public CompletableFuture<Void> run(@NonNull Tool tool, @NonNull String toolVersion, @NonNull List<String> args, @Nullable Timeout timeout) {
         lastArguments = new Arguments(tool, toolVersion, List.copyOf(args), timeout);
+        allArguments.add(lastArguments);
         return exception == null ? CompletableFuture.completedFuture(null) : CompletableFuture.failedFuture(exception);
     }
 
@@ -37,6 +40,15 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
      */
     public @Nullable Arguments lastArguments() {
         return lastArguments;
+    }
+
+    /**
+     * Returns the arguments of every {@link #run} invocation, in call order.
+     *
+     * @return the recorded invocations, empty if the runner was never invoked
+     */
+    public List<Arguments> allArguments() {
+        return List.copyOf(allArguments);
     }
 
     /**

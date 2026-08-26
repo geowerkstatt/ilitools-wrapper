@@ -502,14 +502,22 @@ public final class IlivalidatorServiceTest {
 
     @Test
     void returnsHealthyOnSuccess() {
+        ilitoolsRunner.offerVersions("1.15.0", "1.14.4");
+
         assertEquals(HealthCheckResponse.ServingStatus.SERVING, service.getHealthStatus());
 
-        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
-        assertNotNull(arguments, "The runner should have been invoked.");
+        // The default is always probed first; the per-call assertions below pin that first probe down the
+        // same way the single-probe check used to, before the full probe order is checked separately.
+        List<IlitoolsRunnerMock.Arguments> allArguments = ilitoolsRunner.allArguments();
+        assertFalse(allArguments.isEmpty(), "The runner should have been invoked.");
+        IlitoolsRunnerMock.Arguments arguments = allArguments.getFirst();
         assertEquals(IlitoolsRunnerMock.Tool.ILIVALIDATOR, arguments.tool());
         assertEquals(List.of("--version"), arguments.args());
         assertNotNull(arguments.timeout(), "The health check should use a timeout.");
         assertEquals("", arguments.toolVersion(), "The health check must probe the deployment default.");
+
+        List<String> probedVersions = allArguments.stream().map(IlitoolsRunnerMock.Arguments::toolVersion).toList();
+        assertEquals(List.of("", "1.14.4", "1.15.0"), probedVersions, "The health check must probe the default and every offered version.");
     }
 
     @Test
