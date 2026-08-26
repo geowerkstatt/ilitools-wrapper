@@ -256,8 +256,11 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         }
 
         private void cancelWithError(Status status) {
-            responseObserver.onError(status.asRuntimeException());
+            // Deleting first makes the observable contract deterministic: when the client sees the error, the
+            // session directory is gone. onError is an async handoff to the transport, so cleanup after it
+            // races the client's next assertion.
             files.deleteAll();
+            responseObserver.onError(status.asRuntimeException());
         }
 
         // Runs after the received files are closed and before the log files exist. The archive lands in its own
