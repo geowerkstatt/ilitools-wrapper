@@ -14,6 +14,7 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     private @Nullable Arguments lastArguments;
     private @Nullable Exception exception;
     private Set<String> availableVersions = Set.of();
+    private @Nullable Tool versionsQueriedFor;
 
     @Override
     @NonNull
@@ -25,6 +26,7 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     @Override
     @NonNull
     public Set<String> availableVersions(@NonNull Tool tool) {
+        versionsQueriedFor = tool;
         return availableVersions;
     }
 
@@ -53,5 +55,14 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
      */
     public void offerVersions(String... versions) {
         this.availableVersions = new TreeSet<>(List.of(versions));
+    }
+
+    /**
+     * Returns the tool of the most recent {@link #availableVersions} query.
+     *
+     * @return the queried tool, or {@code null} if the versions were never queried
+     */
+    public @Nullable Tool versionsQueriedFor() {
+        return versionsQueriedFor;
     }
 }

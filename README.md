@@ -143,6 +143,10 @@ Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet u
 
 Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig` sowie der optionale Dateityp `REPOSITORY_ARCHIVE` zur Verfügung, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile). Zusatzfunktionen aus Plugins lassen sich über `pluginIds` zuschalten, siehe [Plugins zuschalten](#plugins-zuschalten); ili2gpkg kann mit `OPERATION_VALIDATE` ebenfalls validieren und nimmt dieselbe Tool-Option.
 
+| Feld | Beschreibung |
+| --- | --- |
+| `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird |
+
 ### Ablauf der Antwort
 
 Nachdem der Anfrage-Stream abgeschlossen ist, werden die Daten verarbeitet.
@@ -193,6 +197,10 @@ Die folgenden Optionen können in der `info`-Nachricht gesetzt und werden als Ko
 | `skipPolygonBuilding` | `--skipPolygonBuilding` |
 
 Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile), sowie `pluginIds`, siehe [Plugins zuschalten](#plugins-zuschalten).
+
+| Feld | Beschreibung |
+| --- | --- |
+| `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird |
 
 ### Ablauf der Antwort
 

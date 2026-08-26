@@ -509,6 +509,7 @@ public final class IlivalidatorServiceTest {
         assertEquals(IlitoolsRunnerMock.Tool.ILIVALIDATOR, arguments.tool());
         assertEquals(List.of("--version"), arguments.args());
         assertNotNull(arguments.timeout(), "The health check should use a timeout.");
+        assertEquals("", arguments.toolVersion(), "The health check must probe the deployment default.");
     }
 
     @Test
@@ -521,6 +522,64 @@ public final class IlivalidatorServiceTest {
         assertEquals(IlitoolsRunnerMock.Tool.ILIVALIDATOR, arguments.tool());
         assertEquals(List.of("--version"), arguments.args());
         assertNotNull(arguments.timeout(), "The health check should use a timeout.");
+        assertEquals("", arguments.toolVersion(), "The health check must probe the deployment default.");
+    }
+
+    @Test
+    void unknownToolVersionIsRejected() {
+        ilitoolsRunner.offerVersions("1.15.0");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setToolVersion("1.0.0"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected request.");
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
+    }
+
+    @Test
+    void requestedToolVersionIsPassedToTheRunner() {
+        ilitoolsRunner.offerVersions("1.15.0", "1.14.4");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setToolVersion("1.14.4"))
+                .build());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals("1.14.4", arguments.toolVersion());
+        // The version selects the jar, it is not a tool option.
+        assertFalse(arguments.args().contains("1.14.4"), "The version must not appear in the CLI arguments.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILIVALIDATOR, ilitoolsRunner.versionsQueriedFor(), "The service must consult its own tool's versions.");
+
+        assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
+    }
+
+    @Test
+    void emptyToolVersionRunsTheDefault() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals("", arguments.toolVersion(), "Without a selection the deployment default must run.");
+
+        assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
     }
 
     void assertHasResponses(boolean success, IlivalidatorFileType... expectedFiles) {

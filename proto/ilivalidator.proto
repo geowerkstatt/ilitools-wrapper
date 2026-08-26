@@ -38,6 +38,10 @@ message ValidateRequestInfo {
   repeated string modelDirs = 7;
   string metaConfig = 8;
   repeated string pluginIds = 9;
+  // Version of the tool to run, offered by the deployment as a directory per version. Empty selects the
+  // deployment default, which is deliberately decoupled from the newest offered version. A version the
+  // deployment does not offer is rejected with INVALID_ARGUMENT.
+  string toolVersion = 10;
 }
 
 message ValidateRequest {
