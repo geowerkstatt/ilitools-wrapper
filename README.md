@@ -113,7 +113,7 @@ Der Wrapper bringt pro Werkzeug eine oder mehrere Versionen mit, je Version ein 
 
 Die Voreinstellung ist bewusst von der neusten Version entkoppelt: so lässt sich eine neue Version anbieten, ohne dass sie automatisch greift, etwa weil sie experimentell ist. Welche Version tatsächlich lief, steht im Log-Kopf des Werkzeugs (`ilivalidator-1.15.0-...`); eine Lieferung trägt den Nachweis also mit.
 
-Die angebotene Menge bestimmt das Deployment: die Build-Argumente `ILI2GPKG_ADDITIONAL_VERSIONS` / `ILIVALIDATOR_ADDITIONAL_VERSIONS` (Leerzeichen- oder Komma-getrennt) des Docker-Images ergänzen die Voreinstellung; für die lokale Entwicklung entsprechen ihnen `ili2gpkgAdditionalVersions` / `ilivalidatorAdditionalVersions` (Komma-getrennt) in `gradle.properties`. Die Menge klein halten, etwa aktuell plus Vorgänger: die Request-Felder bilden auf die Optionen einer Version ab, und eine zu alte Version scheitert an einer unbekannten Option im Werkzeug statt an unserer Prüfung.
+Die angebotene Menge bestimmt das Deployment: die Build-Argumente `ILI2GPKG_ADDITIONAL_VERSIONS` / `ILIVALIDATOR_ADDITIONAL_VERSIONS` (Leerzeichen- oder Komma-getrennt) des Docker-Images ergänzen die Voreinstellung; für die lokale Entwicklung entsprechen ihnen `ili2gpkgAdditionalVersions` / `ilivalidatorAdditionalVersions` (Komma- oder Leerzeichen-getrennt) in `gradle.properties`. Die Menge klein halten, etwa aktuell plus Vorgänger: die Request-Felder bilden auf die Optionen einer Version ab, und eine zu alte Version scheitert an einer unbekannten Option im Werkzeug statt an unserer Prüfung.
 
 ## Ili2gpkg service
 

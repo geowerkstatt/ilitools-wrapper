@@ -146,7 +146,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
                 return;
             } catch (IllegalStateException e) {
-                LOGGER.severe("Rejected request options: " + e.getMessage());
+                LOGGER.log(Level.SEVERE, "Cannot serve the request.", e);
                 cancelWithError(Status.ABORTED.withDescription(e.getMessage()));
                 return;
             }

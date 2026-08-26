@@ -4,6 +4,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -122,7 +123,16 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         if (toolHome == null || toolHome.isEmpty()) {
             return Set.of();
         }
-        Path home = Path.of(toolHome);
+
+        Path home;
+        try {
+            home = Path.of(toolHome);
+        } catch (InvalidPathException e) {
+            // Same fail-closed outcome as an unreadable home: the tool offers nothing, and the health check
+            // reports the unresolvable default.
+            LOGGER.warning("The home of " + tool + " is not a valid path: " + toolHome);
+            return Set.of();
+        }
         if (!Files.isDirectory(home)) {
             return Set.of();
         }
@@ -143,6 +153,7 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         }
     }
 
+    // Precondition: must only be called with a version that resolveVersion already matched against the offered set.
     private String findTool(ToolVersion toolVersion) {
         Tool tool = toolVersion.tool();
         String version = toolVersion.version();

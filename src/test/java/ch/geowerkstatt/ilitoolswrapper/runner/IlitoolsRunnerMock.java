@@ -21,8 +21,9 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     @Override
     @NonNull
     public CompletableFuture<Void> run(@NonNull Tool tool, @NonNull String toolVersion, @NonNull List<String> args, @Nullable Timeout timeout) {
-        lastArguments = new Arguments(tool, toolVersion, List.copyOf(args), timeout);
-        allArguments.add(lastArguments);
+        Arguments arguments = new Arguments(tool, toolVersion, List.copyOf(args), timeout);
+        lastArguments = arguments;
+        allArguments.add(arguments);
         return exception == null ? CompletableFuture.completedFuture(null) : CompletableFuture.failedFuture(exception);
     }
 
