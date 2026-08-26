@@ -108,80 +108,47 @@ val ilitoolsHome = layout.projectDirectory.dir("ilitools")
 val ili2gpkgHome = ilitoolsHome.dir("ili2gpkg")
 val ilivalidatorHome = ilitoolsHome.dir("ilivalidator")
 
-// Downloads every offered ili2gpkg version into ./ilitools/ili2gpkg/<version>/ for local development.
-// A version is a whole directory: the distribution manifest pins its exact libs/, so versions cannot share.
-tasks.register("downloadIli2gpkg") {
+// Downloads every offered version of a tool into ./ilitools/<toolName>/<version>/ for local development. A
+// version is a whole directory: the distribution manifest pins its exact libs/, so versions cannot share.
+fun registerIlitoolDownload(taskName: String, toolName: String, versions: Provider<List<String>>, toolHome: Directory) = tasks.register(taskName) {
     group = "ilitools"
-    description = "Downloads the offered ili2gpkg versions into ./ilitools for local development"
+    description = "Downloads the offered $toolName versions into ./ilitools for local development"
 
-    val targetDir = ili2gpkgHome
-    inputs.property("versions", ili2gpkgVersions)
-    outputs.dir(targetDir)
-
-    // Skip when every offered version is already present
-    onlyIf { ili2gpkgVersions.get().any { version -> !targetDir.dir(version).file("ili2gpkg-$version.jar").asFile.exists() } }
+    inputs.property("versions", versions)
+    outputs.dir(toolHome)
 
     doLast {
-        ili2gpkgVersions.get().forEach { version ->
-            val versionDir = targetDir.dir(version).asFile
-            if (versionDir.resolve("ili2gpkg-$version.jar").exists()) {
+        val offered = versions.get()
+        // Anything below the tool home that is not an offered version is stale (a removed version or the
+        // old flat layout) and would otherwise still be offered by the scan, diverging from the image.
+        toolHome.asFile.listFiles()?.filter { child -> child.name !in offered }?.forEach { child -> project.delete(child) }
+
+        offered.forEach { version ->
+            val versionDir = toolHome.dir(version).asFile
+            if (versionDir.resolve("$toolName-$version.jar").exists()) {
                 return@forEach
             }
 
-            val downloadUrl = uri("https://downloads.interlis.ch/ili2gpkg/ili2gpkg-$version.zip")
-            val zipFile = temporaryDir.resolve("ili2gpkg-$version.zip")
+            val downloadUrl = project.uri("https://downloads.interlis.ch/$toolName/$toolName-$version.zip")
+            val zipFile = temporaryDir.resolve("$toolName-$version.zip")
 
             logger.lifecycle("Downloading $downloadUrl")
             downloadUrl.toURL().openStream().use { input ->
                 zipFile.outputStream().use { output -> input.copyTo(output) }
             }
 
-            delete(versionDir)
-            copy {
-                from(zipTree(zipFile))
+            project.delete(versionDir)
+            project.copy {
+                from(project.zipTree(zipFile))
                 into(versionDir)
             }
-            logger.lifecycle("Extracted ili2gpkg $version into $versionDir")
+            logger.lifecycle("Extracted $toolName $version into $versionDir")
         }
     }
 }
 
-// Downloads every offered ilivalidator version into ./ilitools/ilivalidator/<version>/ for local development.
-tasks.register("downloadIlivalidator") {
-    group = "ilitools"
-    description = "Downloads the offered ilivalidator versions into ./ilitools for local development"
-
-    val targetDir = ilivalidatorHome
-    inputs.property("versions", ilivalidatorVersions)
-    outputs.dir(targetDir)
-
-    // Skip when every offered version is already present
-    onlyIf { ilivalidatorVersions.get().any { version -> !targetDir.dir(version).file("ilivalidator-$version.jar").asFile.exists() } }
-
-    doLast {
-        ilivalidatorVersions.get().forEach { version ->
-            val versionDir = targetDir.dir(version).asFile
-            if (versionDir.resolve("ilivalidator-$version.jar").exists()) {
-                return@forEach
-            }
-
-            val downloadUrl = uri("https://downloads.interlis.ch/ilivalidator/ilivalidator-$version.zip")
-            val zipFile = temporaryDir.resolve("ilivalidator-$version.zip")
-
-            logger.lifecycle("Downloading $downloadUrl")
-            downloadUrl.toURL().openStream().use { input ->
-                zipFile.outputStream().use { output -> input.copyTo(output) }
-            }
-
-            delete(versionDir)
-            copy {
-                from(zipTree(zipFile))
-                into(versionDir)
-            }
-            logger.lifecycle("Extracted ilivalidator $version into $versionDir")
-        }
-    }
-}
+registerIlitoolDownload("downloadIli2gpkg", "ili2gpkg", ili2gpkgVersions, ili2gpkgHome)
+registerIlitoolDownload("downloadIlivalidator", "ilivalidator", ilivalidatorVersions, ilivalidatorHome)
 
 // A minimal ilivalidator plugin, built here instead of pulled from a release of a real function library, so the
 // tests prove the --plugins mechanism without depending on that library's evolution and without an external
