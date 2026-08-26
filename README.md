@@ -19,10 +19,10 @@ Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Dock
 | --- | --- | --- |
 | `GRPC_PORT` | `5555` | Port des gRPC-Servers |
 | `PROCESSING_DIR` | `processing` | Basis-Verzeichnis für temporäre Dateien während der Prozessierung |
-| `ILI2GPKG_HOME` | Aus Dockerfile oder Gradle `run` Task | Verzeichnis der ili2gpkg Installation |
-| `ILI2GPKG_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ili2gpkg Tools |
-| `ILIVALIDATOR_HOME` | Aus Dockerfile oder Gradle `run` Task | Verzeichnis der ilivalidator Installation |
-| `ILIVALIDATOR_VERSION` | Aus Dockerfile oder gradle.properties | Version des installierten ilivalidator Tools |
+| `ILI2GPKG_HOME` | Aus Dockerfile oder Gradle `run` Task | Installationsverzeichnis von ili2gpkg, ein Unterordner pro angebotener Version |
+| `ILI2GPKG_VERSION` | Aus Dockerfile oder gradle.properties | Voreinstellung der ili2gpkg-Version, wenn ein Request keine wählt (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)) |
+| `ILIVALIDATOR_HOME` | Aus Dockerfile oder Gradle `run` Task | Installationsverzeichnis von ilivalidator, ein Unterordner pro angebotener Version |
+| `ILIVALIDATOR_VERSION` | Aus Dockerfile oder gradle.properties | Voreinstellung der ilivalidator-Version, wenn ein Request keine wählt (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)) |
 | `ILITOOLS_PLUGINS_DIR` | nicht gesetzt | Verzeichnis mit einem Unterordner pro angebotenem Plugin. Ohne Angabe bietet das Deployment keine Plugins an (siehe [Plugins zuschalten](#plugins-zuschalten)) |
 | `MODELDIR_ALLOW_PRIVATE_NETWORKS` | `false` | Erlaubt `modelDirs`-URLs, die in nicht öffentliche Adressbereiche auflösen (siehe [Modell-Repositories und Profile](#modell-repositories-und-profile)) |
 
@@ -107,6 +107,13 @@ Die Menge wird bei **jedem** Request aus dem Verzeichnis gelesen. Ein neu abgele
 
 **Ein fehlendes Plugin fällt nicht auf.** Gemessen an ilivalidator 1.15.0: ruft ein `MANDATORY CONSTRAINT` eine Funktion auf, deren Plugin nicht geladen ist, überspringt das Tool den Constraint mit `Warning: ... is not yet implemented.` und **beendet den Lauf erfolgreich**. Eine Option, die das zum Fehler macht, gibt es nicht. Wer aus dem Validierungsresultat eine Freigabe ableitet, muss die Logs deshalb auf übersprungene Constraints prüfen; der Erfolg allein sagt nicht, dass alle Constraints ausgewertet wurden. Aus demselben Grund ist die Zeile `pluginFolder <...>` im Log kein Nachweis: sie erscheint bei jedem Lauf, auch ohne `--plugins`.
 
+## Werkzeug-Version wählen
+
+Der Wrapper bringt pro Werkzeug eine oder mehrere Versionen mit, je Version ein Unterordner von `{TOOL}_HOME` (etwa `/opt/ilivalidator/1.15.0`). Das optionale Feld `toolVersion` der `info`-Nachricht wählt eine davon. Leer gilt die Voreinstellung aus `{TOOL}_VERSION`; eine Version, die das Image nicht mitbringt, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei übertragen wird.
+
+Die Voreinstellung ist bewusst von der neusten Version entkoppelt: so lässt sich eine neue Version anbieten, ohne dass sie ohne Zutun greift, etwa weil sie experimentell ist. Welche Version tatsächlich lief, steht im Log-Kopf des Werkzeugs (`ilivalidator-1.15.0-...`), eine Lieferung trägt den Nachweis also mit.
+
+Die angebotene Menge bestimmt das Image: die Build-Argumente `ILI2GPKG_ADDITIONAL_VERSIONS` / `ILIVALIDATOR_ADDITIONAL_VERSIONS` (Leerzeichen- oder Komma-getrennt) ergänzen die Voreinstellung; für die lokale Entwicklung entsprechen dem `ili2gpkgAdditionalVersions` / `ilivalidatorAdditionalVersions` (Komma-getrennt) in `gradle.properties`. Die Menge klein halten, etwa aktuell plus Vorgänger: die Request-Felder bilden auf die Optionen einer Version ab, und eine zu alte Version scheitert an einer unbekannten Option im Werkzeug statt an unserer Prüfung.
 
 ## Ili2gpkg service
 

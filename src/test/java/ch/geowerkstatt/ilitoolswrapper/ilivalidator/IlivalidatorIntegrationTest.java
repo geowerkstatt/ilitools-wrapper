@@ -351,6 +351,51 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         assertTrue(leftOver.isEmpty(), "The session directory must be removed after a rejected archive, but found " + leftOver);
     }
 
+    @Test
+    public void testValidateRunsTheSelectedToolVersion() throws Exception {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        // 1.14.4 must be offered through ilivalidatorAdditionalVersions in gradle.properties, which the
+        // download task materializes next to the default. The tool writes its version into the log header,
+        // which the issue records as the traceability channel, so the header is also the proof of selection.
+        call.write(info(info -> info.addModelDirs("%ITF_DIR/models").setToolVersion("1.14.4")));
+        writeTransferFileAndModel(call, "ilivalidator/transfer.xtf");
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "selected_version_log.xtf");
+        assertTrue(result.success, "Validation should succeed with the selected version. Log:\n" + result.log);
+        assertTrue(result.log.contains("ilivalidator-1.14.4"), "The log header should name the selected version. Log:\n" + result.log);
+    }
+
+    @Test
+    public void testValidateRunsTheDefaultToolVersionWithoutSelection() throws Exception {
+        String defaultVersion = Objects.requireNonNull(System.getenv("ILIVALIDATOR_VERSION"), "The test task must set ILIVALIDATOR_VERSION.");
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        call.write(info(info -> info.addModelDirs("%ITF_DIR/models")));
+        writeTransferFileAndModel(call, "ilivalidator/transfer.xtf");
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "default_version_log.xtf");
+        assertTrue(result.success, "Validation should succeed with the default version. Log:\n" + result.log);
+        assertTrue(result.log.contains("ilivalidator-" + defaultVersion),
+                "The log header should name the default version " + defaultVersion + ". Log:\n" + result.log);
+    }
+
+    @Test
+    public void testValidateRejectsUnknownToolVersion() throws Exception {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        call.write(info(info -> info.setToolVersion("9.9.9")));
+        call.halfClose();
+
+        StatusException exception = assertThrows(StatusException.class, () -> readResponse(call, "unknown_version_log.xtf"));
+        assertEquals(Status.Code.INVALID_ARGUMENT, exception.getStatus().getCode(), "An unknown tool version must be rejected as an invalid argument.");
+    }
+
     private static byte[] repositoryArchive() throws IOException {
         return archiveOf(Map.of(
                 "ilidata.xml", resourceAsString("ilivalidator/repository/ilidata.xml"),
