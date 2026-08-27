@@ -40,6 +40,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     // Setting --modeldir replaces the tool default entirely, so %ILI_FROM_DB has to stay available for
     // operations that read the model from the GeoPackage itself.
     private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%XTF_DIR", "%ILI_FROM_DB");
+    // Keeps only the relevant parts of the tool default "%ILI_FROM_DB;%XTF_DIR;http://models.interlis.ch/;%JAR_DIR"
+    // as the %XTF_DIR and %JAR_DIR do not contain model files.
+    private static final String DEFAULT_MODEL_DIR = "%ILI_FROM_DB;http://models.interlis.ch/";
 
     // Session subfolder for received MODEL_FILEs, addressed as %XTF_DIR/models in the model dirs.
     private static final String MODEL_FILES_SUBFOLDER = "models";
@@ -64,7 +67,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     public Ili2gpkgService(FileManager fileManager, IlitoolsRunner ilitoolsRunner, PrivateNetworkPolicy privateNetworkPolicy, PluginCatalog pluginCatalog) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
-        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy);
+        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy, DEFAULT_MODEL_DIR);
         this.pluginCatalog = pluginCatalog;
     }
 

@@ -10,11 +10,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public final class ModelDirValidatorTest {
     private static final Set<String> ILIVALIDATOR_PLACEHOLDERS = Set.of("%ITF_DIR");
+    private static final String ILIVALIDATOR_MODEL_DIR = "http://models.interlis.ch/";
     private static final Set<String> ILI2GPKG_PLACEHOLDERS = Set.of("%XTF_DIR", "%ILI_FROM_DB");
+    private static final String ILI2GPKG_MODEL_DIR = "%ILI_FROM_DB;http://models.interlis.ch/";
 
     @Test
-    void emptyListJoinsToEmptyString() {
-        assertEquals("", ilivalidator().validateAndJoin(List.of()));
+    void emptyListJoinsToDefaultValue() {
+        assertEquals(ILIVALIDATOR_MODEL_DIR, ilivalidator().validateAndJoin(List.of()));
     }
 
     @Test
@@ -161,15 +163,15 @@ public final class ModelDirValidatorTest {
     }
 
     private static ModelDirValidator ilivalidator() {
-        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, PrivateNetworkPolicy.ALLOW);
+        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, PrivateNetworkPolicy.ALLOW, ILIVALIDATOR_MODEL_DIR);
     }
 
     private static ModelDirValidator ili2gpkg() {
-        return new ModelDirValidator(ILI2GPKG_PLACEHOLDERS, PrivateNetworkPolicy.ALLOW);
+        return new ModelDirValidator(ILI2GPKG_PLACEHOLDERS, PrivateNetworkPolicy.ALLOW, ILI2GPKG_MODEL_DIR);
     }
 
     private static ModelDirValidator blockingPrivateNetworks() {
-        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, PrivateNetworkPolicy.BLOCK);
+        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, PrivateNetworkPolicy.BLOCK, ILIVALIDATOR_MODEL_DIR);
     }
 
     private static void assertRejected(ModelDirValidator validator, String entry) {

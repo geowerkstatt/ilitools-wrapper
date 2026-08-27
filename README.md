@@ -35,7 +35,7 @@ Beide Services nehmen in der `info`-Nachricht zwei optionale Felder, mit denen d
 | `modelDirs` | `--modeldir` | Geordnete Liste von Modell-Repositories, in Listenreihenfolge mit `;` zusammengefügt |
 | `metaConfig` | `--metaConfig` | Meta-Konfiguration in der Form `ilidata:<DatasetId>`, vom Tool über die `modelDirs` aufgelöst |
 
-Ohne Angabe gilt das Default-Verhalten der Tools: Die Modelle werden über die eingebauten Repositories bzw. den `ILI_CACHE` aufgelöst.
+Ohne Angabe gelten die Modell-Repositories `%ILI_FROM_DB;http://models.interlis.ch/` für ili2gpkg, sowie `http://models.interlis.ch/` für ilivalidator. Dies entspricht dem Default-Verhalten der Tools, ignoriert jedoch nicht vorhandene Ordner wie `%JAR_DIR/ilimodels`. Die Modelle werden damit über das Standard-Repository bzw. den `ILI_CACHE` aufgelöst.
 
 Ein gesetztes `modelDirs` **ersetzt den Default des Tools vollständig**. Wer die Standard-Repositories weiterhin braucht, gibt sie explizit als Eintrag an (z.B. `https://models.interlis.ch/`).
 

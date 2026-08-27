@@ -139,7 +139,8 @@ public final class IlivalidatorServiceTest {
         assertFalse(args.contains("--allObjectsAccessible"));
         assertFalse(args.contains("--multiplicityOff"));
         assertFalse(args.contains("--skipPolygonBuilding"));
-        assertFalse(args.contains("--modeldir"), "Without model dirs the tool default must stay in effect.");
+        // The IlivalidatorService falls back to the default model dir if no model dirs are specified.
+        assertArgumentWithValue(args, "--modeldir", "http://models.interlis.ch/");
         assertFalse(args.contains("--metaConfig"));
 
         assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
