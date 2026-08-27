@@ -35,6 +35,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -77,6 +78,39 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
                 "The text log and the XTF log should be returned, in that order.");
         assertTrue(result.log.contains("validation done"), "Text log should report a successful validation. Log:\n" + result.log);
         assertXtfLog(result.xtfLogPath);
+    }
+
+    @Test
+    public void testValidateReportsNoWarningForValidDirs() throws Exception {
+        var warningPattern = Pattern.compile("^warning:.+$", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var preconditionCall = client.validate();
+
+        // The order matters here, if the model is found in the first dir, the second dir is not scanned and no warning is issued.
+        preconditionCall.write(info(info -> info
+                .addModelDirs("%ITF_DIR/some-unknown-dir")
+                .addModelDirs("%ITF_DIR/models")));
+        writeTransferFileAndModel(preconditionCall, "ilivalidator/transfer.xtf");
+        preconditionCall.halfClose();
+
+        ValidationResult preconditionResult = readResponse(preconditionCall, "valid_log.xtf");
+        assertTrue(preconditionResult.success, "Validation should have succeeded. Log:\n" + preconditionResult.log);
+        var matcher = warningPattern.matcher(preconditionResult.log);
+        assertTrue(matcher.find(), "Precondition: The tool warns about a missing model dir. Log:\n" + preconditionResult.log);
+        assertTrue(matcher.group().contains("some-unknown-dir"), "Precondition: The warning should mention the missing model dir. Log:\n" + preconditionResult.log);
+
+        var call = client.validate();
+
+        // Include empty repository dir to test that the tool does not warn about valid dirs.
+        call.write(info(info -> info
+                .addModelDirs("%ITF_DIR/repository")
+                .addModelDirs("%ITF_DIR/models")));
+        writeTransferFileAndModel(call, "ilivalidator/transfer.xtf");
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "valid_log.xtf");
+        assertTrue(result.success, "Validation should have succeeded. Log:\n" + result.log);
+        assertFalse(warningPattern.matcher(result.log).find(), "The tool should not warn about valid model dirs. Log:\n" + result.log);
     }
 
     @Test

@@ -1,5 +1,6 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
+import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryArchiveExtractor;
 import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
@@ -8,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.List;
 
 public final class FilesystemFileManager implements FileManager {
     private final Path basePath;
@@ -22,6 +24,19 @@ public final class FilesystemFileManager implements FileManager {
             basePath = "processing";
         }
         this.basePath = Path.of(basePath);
+    }
+
+    @Override
+    public void setupProcessingDirectory(String folderName) throws IOException {
+        Path path = basePath.resolve(folderName);
+
+        // Set up the folder structure for the processing directory, so it can be used by the modeldir placeholders
+        // regardless of files actually sent.
+        List<String> requiredSubfolders = List.of(MODEL_FILES_SUBFOLDER, RepositoryArchiveExtractor.REPOSITORY_SUBFOLDER);
+        for (String subfolder : requiredSubfolders) {
+            Path subfolderPath = path.resolve(subfolder);
+            Files.createDirectories(subfolderPath);
+        }
     }
 
     @Override

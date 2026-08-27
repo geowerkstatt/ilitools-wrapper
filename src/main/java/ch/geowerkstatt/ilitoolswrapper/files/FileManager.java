@@ -7,6 +7,20 @@ import java.io.IOException;
  */
 public interface FileManager {
     /**
+     * Name of the subfolder in the processing directory where model files are stored, addressed as
+     * {@code %ITF_DIR/models} or {@code %XTF_DIR/models} in the model dirs.
+     */
+    String MODEL_FILES_SUBFOLDER = "models";
+
+    /**
+     * Sets up the processing directory structure for a given folder name.
+     *
+     * @param folderName the name of the folder to set up
+     * @throws IOException if an I/O error occurs while creating the directories
+     */
+    void setupProcessingDirectory(String folderName) throws IOException;
+
+    /**
      * Creates a temporary file for processing.
      *
      * @param folderName    the directory the file is created in, automatically created on write if it does not exist

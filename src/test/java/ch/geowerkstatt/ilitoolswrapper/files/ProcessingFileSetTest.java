@@ -1,7 +1,9 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,6 +20,11 @@ public final class ProcessingFileSetTest {
 
     private final InMemoryFileManager fileManager = new InMemoryFileManager();
     private final ProcessingFileSet<TestType> files = new ProcessingFileSet<>(fileManager);
+
+    @BeforeEach
+    void setUp() throws IOException {
+        files.setupSessionDirectory();
+    }
 
     @Test
     void createRegistersFileAndReturnsIt() {

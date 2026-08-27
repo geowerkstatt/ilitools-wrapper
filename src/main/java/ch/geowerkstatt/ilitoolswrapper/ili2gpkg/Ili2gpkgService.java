@@ -44,9 +44,6 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     // as the %XTF_DIR and %JAR_DIR do not contain model files.
     private static final String DEFAULT_MODEL_DIR = "%ILI_FROM_DB;http://models.interlis.ch/";
 
-    // Session subfolder for received MODEL_FILEs, addressed as %XTF_DIR/models in the model dirs.
-    private static final String MODEL_FILES_SUBFOLDER = "models";
-
     private record ProcessingArguments(Ili2gpkgFileType outputFileType, boolean returnOutputOnError, List<String> arguments) { }
 
     private static final Logger LOGGER = Logger.getLogger(Ili2gpkgService.class.getName());
@@ -154,6 +151,14 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 return;
             }
 
+            try {
+                files.setupSessionDirectory();
+            } catch (IOException e) {
+                LOGGER.log(Level.SEVERE, "Failed to set up session directory.", e);
+                cancelWithError(Status.ABORTED.withDescription("Failed to set up session directory."));
+                return;
+            }
+
             this.info = info;
             LOGGER.fine("Received info: " + info);
         }
@@ -184,7 +189,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 // Model files get their own subfolder, so a model dir entry can address exactly them
                 // (%XTF_DIR/models) and rank them against the other sources.
                 currentFile = type == Ili2gpkgFileType.MODEL_FILE
-                        ? files.create(type, MODEL_FILES_SUBFOLDER, fileName, extension)
+                        ? files.create(type, FileManager.MODEL_FILES_SUBFOLDER, fileName, extension)
                         : files.create(type, fileName, extension);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());

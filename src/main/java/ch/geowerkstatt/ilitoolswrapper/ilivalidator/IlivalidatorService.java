@@ -42,9 +42,6 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     // as the %ITF_DIR does not contain model files and %JAR_DIR/ilimodels does not exist.
     private static final String DEFAULT_MODEL_DIR = "http://models.interlis.ch/";
 
-    // Session subfolder for received MODEL_FILEs, addressed as %ITF_DIR/models in the model dirs.
-    private static final String MODEL_FILES_SUBFOLDER = "models";
-
     private static final Logger LOGGER = Logger.getLogger(IlivalidatorService.class.getName());
     private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
     private final FileManager fileManager;
@@ -150,6 +147,14 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 return;
             }
 
+            try {
+                files.setupSessionDirectory();
+            } catch (IOException e) {
+                LOGGER.log(Level.SEVERE, "Failed to set up session directory.", e);
+                cancelWithError(Status.ABORTED.withDescription("Failed to set up session directory."));
+                return;
+            }
+
             this.info = info;
             LOGGER.fine("Received info: " + info);
         }
@@ -182,7 +187,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 // Model files get their own subfolder, so a model dir entry can address exactly them
                 // (%ITF_DIR/models) and rank them against the other sources.
                 currentFile = type == IlivalidatorFileType.MODEL_FILE
-                        ? files.create(type, MODEL_FILES_SUBFOLDER, fileName, extension)
+                        ? files.create(type, FileManager.MODEL_FILES_SUBFOLDER, fileName, extension)
                         : files.create(type, fileName, extension);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());

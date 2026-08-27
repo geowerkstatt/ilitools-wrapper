@@ -1,5 +1,6 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -30,6 +31,14 @@ public final class ProcessingFileSet<F extends Enum<F>> {
      */
     public ProcessingFileSet(FileManager fileManager) {
         this.fileManager = fileManager;
+    }
+
+    /**
+     * Sets up the session directory for this file set. Should be called before any files are created.
+     * @throws IOException if an I/O error occurs while creating the session directory
+     */
+    public void setupSessionDirectory() throws IOException {
+        fileManager.setupProcessingDirectory(sessionId.toString());
     }
 
     /**
