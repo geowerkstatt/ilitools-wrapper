@@ -487,13 +487,22 @@ public final class Ili2gpkgServiceTest {
 
     @Test
     void returnsHealthyOnSuccess() {
+        ilitoolsRunner.offerVersions("5.5.2", "5.4.0");
+
         assertEquals(HealthCheckResponse.ServingStatus.SERVING, service.getHealthStatus());
 
-        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
-        assertNotNull(arguments, "The runner should have been invoked.");
+        // The default is always probed first; the per-call assertions below pin that first probe down the
+        // same way the single-probe check used to, before the full probe order is checked separately.
+        List<IlitoolsRunnerMock.Arguments> allArguments = ilitoolsRunner.allArguments();
+        assertFalse(allArguments.isEmpty(), "The runner should have been invoked.");
+        IlitoolsRunnerMock.Arguments arguments = allArguments.getFirst();
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
         assertEquals(List.of("--version"), arguments.args());
         assertNotNull(arguments.timeout(), "The health check should use a timeout.");
+        assertEquals("", arguments.toolVersion(), "The health check must probe the deployment default.");
+
+        List<String> probedVersions = allArguments.stream().map(IlitoolsRunnerMock.Arguments::toolVersion).toList();
+        assertEquals(List.of("", "5.4.0", "5.5.2"), probedVersions, "The health check must probe the default and every offered version.");
     }
 
     @Test
@@ -506,6 +515,82 @@ public final class Ili2gpkgServiceTest {
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
         assertEquals(List.of("--version"), arguments.args());
         assertNotNull(arguments.timeout(), "The health check should use a timeout.");
+        assertEquals("", arguments.toolVersion(), "The health check must probe the deployment default.");
+    }
+
+    @Test
+    void unknownToolVersionIsRejected() {
+        ilitoolsRunner.offerVersions("5.5.2");
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setToolVersion("5.0.0"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected request.");
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
+    }
+
+    @Test
+    void toolVersionWithoutAnyOfferedVersionIsAServerFault() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        // The mock offers no versions, mirroring a missing or unreadable tool home. That is a deployment
+        // fault, so the client must see ABORTED and not an INVALID_ARGUMENT it cannot fix.
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setToolVersion("5.5.2"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.ABORTED, statusCodeOf(responseObserver.error()));
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected request.");
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
+    }
+
+    @Test
+    void requestedToolVersionIsPassedToTheRunner() {
+        ilitoolsRunner.offerVersions("5.5.2", "5.4.0");
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_SCHEMA_IMPORT)
+                        .setToolVersion("5.4.0"))
+                .build());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals("5.4.0", arguments.toolVersion());
+        // The version selects the jar, it is not a tool option.
+        assertFalse(arguments.args().contains("5.4.0"), "The version must not appear in the CLI arguments.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, ilitoolsRunner.versionsQueriedFor(), "The service must consult its own tool's versions.");
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+    }
+
+    @Test
+    void emptyToolVersionRunsTheDefault() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals("", arguments.toolVersion(), "Without a selection the deployment default must run.");
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     private static void assertArgumentWithValue(List<String> args, String name, String value) {

@@ -77,7 +77,13 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     public HealthCheckResponse.ServingStatus getHealthStatus() {
         try {
             IlitoolsRunner.Timeout timeout = new IlitoolsRunner.Timeout(5, TimeUnit.SECONDS);
-            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, List.of("--version"), timeout).get();
+            // The empty string probes the deployment default including its membership in the offered set;
+            // every offered version is probed as well, so a defective additional jar surfaces here instead
+            // of masquerading as a failed validation of some client's data.
+            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, "", List.of("--version"), timeout).get();
+            for (String version : ilitoolsRunner.availableVersions(IlitoolsRunner.Tool.ILI2GPKG)) {
+                ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, version, List.of("--version"), timeout).get();
+            }
             return HealthCheckResponse.ServingStatus.SERVING;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -100,6 +106,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         private @Nullable ConvertRequestInfo info;
         private String modelDirArgument = "";
         private Set<String> requestedPlugins = Set.of();
+        private String requestedToolVersion = "";
 
         ConvertObserver(StreamObserver<ConvertResponse> responseObserver) {
             this.responseObserver = responseObserver;
@@ -127,14 +134,20 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
             // Rejected here rather than during argument mapping, so that no file is received for a request that cannot run.
             // The plugin ids are resolved against the catalog on every request, so a plugin added to the configured
-            // directory is selectable without restarting the service.
+            // directory is selectable without restarting the service. The tool version is matched against the
+            // versions the image ships.
             try {
                 modelDirArgument = modelDirValidator.validateAndJoin(info.getModelDirsList());
                 ModelDirValidator.validateMetaConfig(info.getMetaConfig());
                 requestedPlugins = pluginCatalog.validate(info.getPluginIdsList());
+                requestedToolVersion = validateToolVersion(info.getToolVersion());
             } catch (IllegalArgumentException e) {
-                LOGGER.warning("Rejected model repository options: " + e.getMessage());
+                LOGGER.warning("Rejected request options: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
+                return;
+            } catch (IllegalStateException e) {
+                LOGGER.log(Level.SEVERE, "Cannot serve the request.", e);
+                cancelWithError(Status.ABORTED.withDescription(e.getMessage()));
                 return;
             }
 
@@ -234,7 +247,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
 
                 ProcessingArguments processingArguments = parsedArguments.get();
-                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, processingArguments.arguments(), null)
+                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, requestedToolVersion, processingArguments.arguments(), null)
                         .handleAsync((_, throwable) -> {
                             if (throwable != null) {
                                 LOGGER.warning("Processing data with ili2gpkg failed: " + throwable);
@@ -245,9 +258,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                             return null;
                         });
             } catch (IllegalArgumentException e) {
-                // Reaches here from the plugin materialization, the only argument mapping step that can still
-                // reject a request that passed the checks in onInfo.
-                LOGGER.warning("Rejected plugin selection: " + e.getMessage());
+                // Reaches here from the plugin materialization, and from the runner's version backstop in case
+                // the offered set ever diverged between the onInfo validation and the start of the tool.
+                LOGGER.warning("Rejected during argument mapping: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Failed to start ili2gpkg process.", e);
@@ -256,8 +269,11 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         }
 
         private void cancelWithError(Status status) {
-            responseObserver.onError(status.asRuntimeException());
+            // Deleting first makes the observable contract deterministic: when the client sees the error, the
+            // session directory is gone. onError is an async handoff to the transport, so cleanup after it
+            // races the client's next assertion.
             files.deleteAll();
+            responseObserver.onError(status.asRuntimeException());
         }
 
         // Runs after the received files are closed and before the output files exist. The archive lands in its own
@@ -393,6 +409,28 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
+        }
+
+        /**
+         * Validates the requested tool version against the offered set. Rejected in onInfo so that no file is
+         * received for a request that cannot run; the match against the offered set is also what keeps the
+         * request value from ever becoming a path.
+         */
+        private String validateToolVersion(String toolVersion) {
+            if (toolVersion.isEmpty()) {
+                return toolVersion;
+            }
+
+            Set<String> availableVersions = ilitoolsRunner.availableVersions(IlitoolsRunner.Tool.ILI2GPKG);
+            if (availableVersions.isEmpty()) {
+                // An empty set means the tool home itself is missing or wrong: a deployment fault, not a
+                // request fault, so it must not surface as INVALID_ARGUMENT.
+                throw new IllegalStateException("No " + IlitoolsRunner.Tool.ILI2GPKG + " versions are offered; the deployment is misconfigured.");
+            }
+            if (!availableVersions.contains(toolVersion)) {
+                throw new IllegalArgumentException("Tool version \"" + toolVersion + "\" is not available, expected one of " + availableVersions + ".");
+            }
+            return toolVersion;
         }
 
         private static void addArgument(List<String> args, String argument, @Nullable String value) {

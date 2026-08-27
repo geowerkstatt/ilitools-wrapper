@@ -96,81 +96,59 @@ tasks.test {
 
 val ili2gpkgVersion = providers.gradleProperty("ili2gpkgVersion")
 val ilivalidatorVersion = providers.gradleProperty("ilivalidatorVersion")
+// The offered set is the default plus the comma- or whitespace-separated additional versions; the default
+// stays first. Whitespace is also accepted so a Dockerfile ARG value (space separated) works unchanged here.
+val ili2gpkgVersions = ili2gpkgVersion.zip(providers.gradleProperty("ili2gpkgAdditionalVersions").orElse("")) { default, additional ->
+    listOf(default) + additional.split(Regex("[,\\s]+")).map(String::trim).filter(String::isNotEmpty)
+}
+val ilivalidatorVersions = ilivalidatorVersion.zip(providers.gradleProperty("ilivalidatorAdditionalVersions").orElse("")) { default, additional ->
+    listOf(default) + additional.split(Regex("[,\\s]+")).map(String::trim).filter(String::isNotEmpty)
+}
 val ilitoolsHome = layout.projectDirectory.dir("ilitools")
 val ili2gpkgHome = ilitoolsHome.dir("ili2gpkg")
 val ilivalidatorHome = ilitoolsHome.dir("ilivalidator")
 
-// Downloads ili2gpkg into ./ilitools for local development.
-// The version is taken from the ili2gpkgVersion project property (see gradle.properties).
-tasks.register("downloadIli2gpkg") {
+// Downloads every offered version of a tool into ./ilitools/<toolName>/<version>/ for local development. A
+// version is a whole directory: the distribution manifest pins its exact libs/, so versions cannot share.
+fun registerIlitoolDownload(taskName: String, toolName: String, versions: Provider<List<String>>, toolHome: Directory) = tasks.register(taskName) {
     group = "ilitools"
-    description = "Downloads ili2gpkg into ./ilitools for local development"
+    description = "Downloads the offered $toolName versions into ./ilitools for local development"
 
-    val targetDir = ili2gpkgHome
-    val jarExists = ili2gpkgVersion.map { version -> targetDir.file("ili2gpkg-$version.jar").asFile.exists() }
-
-    inputs.property("version", ili2gpkgVersion)
-    outputs.dir(targetDir)
-
-    // Skip when the matching version is already present
-    onlyIf { !jarExists.getOrElse(false) }
+    inputs.property("versions", versions)
+    outputs.dir(toolHome)
 
     doLast {
-        val version = ili2gpkgVersion.orNull ?: throw GradleException("Set -Pili2gpkgVersion=<version>.")
+        val offered = versions.get()
+        // Anything below the tool home that is not an offered version is stale (a removed version or the
+        // old flat layout) and would otherwise still be offered by the scan, diverging from the image.
+        toolHome.asFile.listFiles()?.filter { child -> child.name !in offered }?.forEach { child -> project.delete(child) }
 
-        val downloadUrl = uri("https://downloads.interlis.ch/ili2gpkg/ili2gpkg-$version.zip")
-        val zipFile = temporaryDir.resolve("ili2gpkg-$version.zip")
+        offered.forEach { version ->
+            val versionDir = toolHome.dir(version).asFile
+            if (versionDir.resolve("$toolName-$version.jar").exists()) {
+                return@forEach
+            }
 
-        logger.lifecycle("Downloading $downloadUrl")
-        downloadUrl.toURL().openStream().use { input ->
-            zipFile.outputStream().use { output -> input.copyTo(output) }
+            val downloadUrl = project.uri("https://downloads.interlis.ch/$toolName/$toolName-$version.zip")
+            val zipFile = temporaryDir.resolve("$toolName-$version.zip")
+
+            logger.lifecycle("Downloading $downloadUrl")
+            downloadUrl.toURL().openStream().use { input ->
+                zipFile.outputStream().use { output -> input.copyTo(output) }
+            }
+
+            project.delete(versionDir)
+            project.copy {
+                from(project.zipTree(zipFile))
+                into(versionDir)
+            }
+            logger.lifecycle("Extracted $toolName $version into $versionDir")
         }
-
-        val dir = targetDir.asFile
-        delete(dir)
-        copy {
-            from(zipTree(zipFile))
-            into(dir)
-        }
-        logger.lifecycle("Extracted ili2gpkg $version into $dir")
     }
 }
 
-// Downloads ilivalidator into ./ilitools for local development.
-// The version is taken from the ilivalidatorVersion project property (see gradle.properties).
-tasks.register("downloadIlivalidator") {
-    group = "ilitools"
-    description = "Downloads ilivalidator into ./ilitools for local development"
-
-    val targetDir = ilivalidatorHome
-    val jarExists = ilivalidatorVersion.map { version -> targetDir.file("ilivalidator-$version.jar").asFile.exists() }
-
-    inputs.property("version", ilivalidatorVersion)
-    outputs.dir(targetDir)
-
-    // Skip when the matching version is already present
-    onlyIf { !jarExists.getOrElse(false) }
-
-    doLast {
-        val version = ilivalidatorVersion.orNull ?: throw GradleException("Set -PilivalidatorVersion=<version>.")
-
-        val downloadUrl = uri("https://downloads.interlis.ch/ilivalidator/ilivalidator-$version.zip")
-        val zipFile = temporaryDir.resolve("ilivalidator-$version.zip")
-
-        logger.lifecycle("Downloading $downloadUrl")
-        downloadUrl.toURL().openStream().use { input ->
-            zipFile.outputStream().use { output -> input.copyTo(output) }
-        }
-
-        val dir = targetDir.asFile
-        delete(dir)
-        copy {
-            from(zipTree(zipFile))
-            into(dir)
-        }
-        logger.lifecycle("Extracted ilivalidator $version into $dir")
-    }
-}
+registerIlitoolDownload("downloadIli2gpkg", "ili2gpkg", ili2gpkgVersions, ili2gpkgHome)
+registerIlitoolDownload("downloadIlivalidator", "ilivalidator", ilivalidatorVersions, ilivalidatorHome)
 
 // A minimal ilivalidator plugin, built here instead of pulled from a release of a real function library, so the
 // tests prove the --plugins mechanism without depending on that library's evolution and without an external
@@ -184,7 +162,9 @@ val testPluginCatalog = layout.buildDirectory.dir("test-plugins")
 // downloadIlivalidator fail on Windows.
 tasks.named<JavaCompile>("compileTestPluginJava") {
     dependsOn("downloadIlivalidator")
-    classpath = files(provider { fileTree(ilivalidatorHome) { include("**/*.jar") } })
+    // Compile against the default version only: with several versions below the home, the whole tree would
+    // put the same classes on the classpath twice.
+    classpath = files(provider { fileTree(ilivalidatorHome.dir(ilivalidatorVersion.get())) { include("**/*.jar") } })
 }
 
 val testPluginJar = tasks.register<Jar>("testPluginJar") {

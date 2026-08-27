@@ -3,20 +3,35 @@ package ch.geowerkstatt.ilitoolswrapper.runner;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 
 public final class IlitoolsRunnerMock implements IlitoolsRunner {
-    public record Arguments(Tool tool, List<String> args, @Nullable Timeout timeout) { }
+    public record Arguments(Tool tool, String toolVersion, List<String> args, @Nullable Timeout timeout) { }
 
     private @Nullable Arguments lastArguments;
+    private final List<Arguments> allArguments = new ArrayList<>();
     private @Nullable Exception exception;
+    private Set<String> availableVersions = Set.of();
+    private @Nullable Tool versionsQueriedFor;
 
     @Override
     @NonNull
-    public CompletableFuture<Void> run(@NonNull Tool tool, @NonNull List<String> args, @Nullable Timeout timeout) {
-        lastArguments = new Arguments(tool, List.copyOf(args), timeout);
+    public CompletableFuture<Void> run(@NonNull Tool tool, @NonNull String toolVersion, @NonNull List<String> args, @Nullable Timeout timeout) {
+        Arguments arguments = new Arguments(tool, toolVersion, List.copyOf(args), timeout);
+        lastArguments = arguments;
+        allArguments.add(arguments);
         return exception == null ? CompletableFuture.completedFuture(null) : CompletableFuture.failedFuture(exception);
+    }
+
+    @Override
+    @NonNull
+    public Set<String> availableVersions(@NonNull Tool tool) {
+        versionsQueriedFor = tool;
+        return availableVersions;
     }
 
     /**
@@ -29,11 +44,38 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     }
 
     /**
+     * Returns the arguments of every {@link #run} invocation, in call order.
+     *
+     * @return the recorded invocations, empty if the runner was never invoked
+     */
+    public List<Arguments> allArguments() {
+        return List.copyOf(allArguments);
+    }
+
+    /**
      * Configures the mock to fail the next {@link #run} invocation with the given exception.
      *
      * @param exception the exception to return on the next run
      */
     public void failRunWith(Exception exception) {
         this.exception = exception;
+    }
+
+    /**
+     * Configures the versions {@link #availableVersions} offers, for any tool.
+     *
+     * @param versions the versions to offer
+     */
+    public void offerVersions(String... versions) {
+        this.availableVersions = new TreeSet<>(List.of(versions));
+    }
+
+    /**
+     * Returns the tool of the most recent {@link #availableVersions} query.
+     *
+     * @return the queried tool, or {@code null} if the versions were never queried
+     */
+    public @Nullable Tool versionsQueriedFor() {
+        return versionsQueriedFor;
     }
 }

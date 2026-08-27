@@ -1,23 +1,37 @@
 ARG ILI2GPKG_VERSION=5.5.2
+ARG ILI2GPKG_ADDITIONAL_VERSIONS=""
 ARG ILIVALIDATOR_VERSION=1.15.0
+ARG ILIVALIDATOR_ADDITIONAL_VERSIONS="1.14.4"
 
 FROM gradle:9-jdk25 AS build
 WORKDIR /src
 ARG APP_VERSION=0.0.1
 ARG ILI2GPKG_VERSION
+ARG ILI2GPKG_ADDITIONAL_VERSIONS
 ARG ILIVALIDATOR_VERSION
+ARG ILIVALIDATOR_ADDITIONAL_VERSIONS
 ARG GRPCURL_VERSION=1.9.3
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl unzip
 
-RUN mkdir -p /opt/ili2gpkg \
-    && curl -fsSL -o /tmp/ili2gpkg.zip "https://downloads.interlis.ch/ili2gpkg/ili2gpkg-${ILI2GPKG_VERSION}.zip" \
-    && unzip -q /tmp/ili2gpkg.zip -d /opt/ili2gpkg
+# One directory per offered version: the distribution manifest pins its exact libs/, so versions cannot
+# share a directory. The version lists must stay in sync with gradle.properties (comma or space separated).
+RUN set -eu; \
+    for version in $(echo "${ILI2GPKG_VERSION} ${ILI2GPKG_ADDITIONAL_VERSIONS}" | tr ',' ' '); do \
+      curl -fsSL -o /tmp/ili2gpkg.zip "https://downloads.interlis.ch/ili2gpkg/ili2gpkg-${version}.zip"; \
+      mkdir -p "/opt/ili2gpkg/${version}"; \
+      unzip -qo /tmp/ili2gpkg.zip -d "/opt/ili2gpkg/${version}"; \
+      rm /tmp/ili2gpkg.zip; \
+    done
 
-RUN mkdir -p /opt/ilivalidator \
-    && curl -fsSL -o /tmp/ilivalidator.zip "https://downloads.interlis.ch/ilivalidator/ilivalidator-${ILIVALIDATOR_VERSION}.zip" \
-    && unzip -q /tmp/ilivalidator.zip -d /opt/ilivalidator
+RUN set -eu; \
+    for version in $(echo "${ILIVALIDATOR_VERSION} ${ILIVALIDATOR_ADDITIONAL_VERSIONS}" | tr ',' ' '); do \
+      curl -fsSL -o /tmp/ilivalidator.zip "https://downloads.interlis.ch/ilivalidator/ilivalidator-${version}.zip"; \
+      mkdir -p "/opt/ilivalidator/${version}"; \
+      unzip -qo /tmp/ilivalidator.zip -d "/opt/ilivalidator/${version}"; \
+      rm /tmp/ilivalidator.zip; \
+    done
 
 RUN mkdir -p /opt/grpcurl \
     && curl -fsSL -o /tmp/grpcurl.tar.gz "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" \
