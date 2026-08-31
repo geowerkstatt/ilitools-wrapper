@@ -1,6 +1,5 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
-import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryArchiveExtractor;
 import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
@@ -27,13 +26,12 @@ public final class FilesystemFileManager implements FileManager {
     }
 
     @Override
-    public void setupProcessingDirectory(String folderName) throws IOException {
+    public void setupProcessingDirectory(String folderName, List<String> subfolders) throws IOException {
         Path path = basePath.resolve(folderName);
 
         // Set up the folder structure for the processing directory, so it can be used by the modeldir placeholders
         // regardless of files actually sent.
-        List<String> requiredSubfolders = List.of(MODEL_FILES_SUBFOLDER, RepositoryArchiveExtractor.REPOSITORY_SUBFOLDER);
-        for (String subfolder : requiredSubfolders) {
+        for (String subfolder : subfolders) {
             Path subfolderPath = path.resolve(subfolder);
             Files.createDirectories(subfolderPath);
         }

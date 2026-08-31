@@ -38,6 +38,13 @@ import java.util.logging.Logger;
 public final class IlivalidatorService extends IlivalidatorServiceGrpc.IlivalidatorServiceImplBase implements ServiceHealthCheck {
     // %ITF_DIR is the directory of the transfer file, which is the session directory of the request.
     private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%ITF_DIR");
+
+    // Session subfolder for received MODEL_FILEs, addressed as %ITF_DIR/models in the model dirs.
+    private static final String MODEL_FILES_SUBFOLDER = "models";
+
+    // Session subfolders that can be configured as model dirs.
+    private static final List<String> SESSION_SUBFOLDERS = List.of(MODEL_FILES_SUBFOLDER, RepositoryArchiveExtractor.REPOSITORY_SUBFOLDER);
+
     // Keeps only the official model repository of the tool default "%ITF_DIR;http://models.interlis.ch/;%JAR_DIR/ilimodels"
     // as the %ITF_DIR does not contain model files and %JAR_DIR/ilimodels does not exist.
     private static final String DEFAULT_MODEL_DIR = "http://models.interlis.ch/";
@@ -148,7 +155,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             }
 
             try {
-                files.setupSessionDirectory();
+                files.setupSessionDirectory(SESSION_SUBFOLDERS);
             } catch (IOException e) {
                 LOGGER.log(Level.SEVERE, "Failed to set up session directory.", e);
                 cancelWithError(Status.ABORTED.withDescription("Failed to set up session directory."));
@@ -187,7 +194,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 // Model files get their own subfolder, so a model dir entry can address exactly them
                 // (%ITF_DIR/models) and rank them against the other sources.
                 currentFile = type == IlivalidatorFileType.MODEL_FILE
-                        ? files.create(type, FileManager.MODEL_FILES_SUBFOLDER, fileName, extension)
+                        ? files.create(type, MODEL_FILES_SUBFOLDER, fileName, extension)
                         : files.create(type, fileName, extension);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());

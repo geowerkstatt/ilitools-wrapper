@@ -1,24 +1,20 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * Creates {@link ProcessingFile}s that are used as temporary files during processing.
  */
 public interface FileManager {
     /**
-     * Name of the subfolder in the processing directory where model files are stored, addressed as
-     * {@code %ITF_DIR/models} or {@code %XTF_DIR/models} in the model dirs.
-     */
-    String MODEL_FILES_SUBFOLDER = "models";
-
-    /**
      * Sets up the processing directory structure for a given folder name.
      *
      * @param folderName the name of the folder to set up
+     * @param subfolders the list of subfolders to create within the processing directory
      * @throws IOException if an I/O error occurs while creating the directories
      */
-    void setupProcessingDirectory(String folderName) throws IOException;
+    void setupProcessingDirectory(String folderName, List<String> subfolders) throws IOException;
 
     /**
      * Creates a temporary file for processing.

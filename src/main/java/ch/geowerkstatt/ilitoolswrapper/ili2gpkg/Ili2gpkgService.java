@@ -40,6 +40,13 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     // Setting --modeldir replaces the tool default entirely, so %ILI_FROM_DB has to stay available for
     // operations that read the model from the GeoPackage itself.
     private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%XTF_DIR", "%ILI_FROM_DB");
+
+    // Session subfolder for received MODEL_FILEs, addressed as %XTF_DIR/models in the model dirs.
+    private static final String MODEL_FILES_SUBFOLDER = "models";
+
+    // Session subfolders that can be configured as model dirs.
+    private static final List<String> SESSION_SUBFOLDERS = List.of(MODEL_FILES_SUBFOLDER, RepositoryArchiveExtractor.REPOSITORY_SUBFOLDER);
+
     // Keeps only the relevant parts of the tool default "%ILI_FROM_DB;%XTF_DIR;http://models.interlis.ch/;%JAR_DIR"
     // as the %XTF_DIR and %JAR_DIR do not contain model files.
     private static final String DEFAULT_MODEL_DIR = "%ILI_FROM_DB;http://models.interlis.ch/";
@@ -152,7 +159,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
 
             try {
-                files.setupSessionDirectory();
+                files.setupSessionDirectory(SESSION_SUBFOLDERS);
             } catch (IOException e) {
                 LOGGER.log(Level.SEVERE, "Failed to set up session directory.", e);
                 cancelWithError(Status.ABORTED.withDescription("Failed to set up session directory."));
@@ -189,7 +196,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 // Model files get their own subfolder, so a model dir entry can address exactly them
                 // (%XTF_DIR/models) and rank them against the other sources.
                 currentFile = type == Ili2gpkgFileType.MODEL_FILE
-                        ? files.create(type, FileManager.MODEL_FILES_SUBFOLDER, fileName, extension)
+                        ? files.create(type, MODEL_FILES_SUBFOLDER, fileName, extension)
                         : files.create(type, fileName, extension);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Invalid argument: " + e.getMessage());

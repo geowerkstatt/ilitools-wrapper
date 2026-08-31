@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * In-memory {@link FileManager} that hands out {@link InMemoryProcessingFile}s and records every creation request,
@@ -23,8 +22,11 @@ public final class InMemoryFileManager implements FileManager {
     }
 
     @Override
-    public void setupProcessingDirectory(String folderName) {
+    public void setupProcessingDirectory(String folderName, List<String> subfolders) {
         createdFolders.add(folderName);
+        for (String subfolder : subfolders) {
+            createdFolders.add(folderName + "/" + subfolder);
+        }
     }
 
     @Override
@@ -32,8 +34,7 @@ public final class InMemoryFileManager implements FileManager {
         if (failure != null) {
             throw failure;
         }
-        String firstFolder = Pattern.compile("[/\\\\]").split(folderName)[0];
-        if (!createdFolders.contains(firstFolder)) {
+        if (!createdFolders.contains(folderName)) {
             throw new IllegalStateException("Processing directory not set up: " + folderName);
         }
         InMemoryProcessingFile file = new InMemoryProcessingFile(Paths.get(folderName, fileName + "." + fileExtension));

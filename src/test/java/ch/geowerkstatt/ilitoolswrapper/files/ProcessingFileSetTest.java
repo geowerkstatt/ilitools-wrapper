@@ -1,5 +1,6 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
+import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryArchiveExtractor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +24,7 @@ public final class ProcessingFileSetTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        files.setupSessionDirectory();
+        files.setupSessionDirectory(List.of("models", RepositoryArchiveExtractor.REPOSITORY_SUBFOLDER));
     }
 
     @Test
