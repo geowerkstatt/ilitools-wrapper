@@ -35,7 +35,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -82,7 +81,8 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
 
     @Test
     public void testValidateReportsNoWarningForValidDirs() throws Exception {
-        var warningPattern = Pattern.compile("^warning:.+$", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+        final String missingFolderWarning = "doesn't exist; ignored";
+
         var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
         var preconditionCall = client.validate();
 
@@ -93,11 +93,10 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         writeTransferFileAndModel(preconditionCall, "ilivalidator/transfer.xtf");
         preconditionCall.halfClose();
 
-        ValidationResult preconditionResult = readResponse(preconditionCall, "valid_log.xtf");
+        ValidationResult preconditionResult = readResponse(preconditionCall, "model_dir_invalid_log.xtf");
         assertTrue(preconditionResult.success, "Validation should have succeeded. Log:\n" + preconditionResult.log);
-        var matcher = warningPattern.matcher(preconditionResult.log);
-        assertTrue(matcher.find(), "Precondition: The tool warns about a missing model dir. Log:\n" + preconditionResult.log);
-        assertTrue(matcher.group().contains("some-unknown-dir"), "Precondition: The warning should mention the missing model dir. Log:\n" + preconditionResult.log);
+        // Full line in log file: "Warning: Folder [path] doesn't exist; ignored"
+        assertTrue(preconditionResult.log.contains("some-unknown-dir " + missingFolderWarning), "Precondition: The warning should mention the missing model dir. Log:\n" + preconditionResult.log);
 
         var call = client.validate();
 
@@ -108,9 +107,9 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         writeTransferFileAndModel(call, "ilivalidator/transfer.xtf");
         call.halfClose();
 
-        ValidationResult result = readResponse(call, "valid_log.xtf");
+        ValidationResult result = readResponse(call, "model_dir_valid_log.xtf");
         assertTrue(result.success, "Validation should have succeeded. Log:\n" + result.log);
-        assertFalse(warningPattern.matcher(result.log).find(), "The tool should not warn about valid model dirs. Log:\n" + result.log);
+        assertFalse(result.log.contains(missingFolderWarning), "The tool should not warn about valid model dirs. Log:\n" + result.log);
     }
 
     @Test
