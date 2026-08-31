@@ -80,6 +80,39 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     }
 
     @Test
+    public void testValidateReportsNoWarningForValidDirs() throws Exception {
+        final String missingFolderWarning = "doesn't exist; ignored";
+
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var preconditionCall = client.validate();
+
+        // The order matters here, if the model is found in the first dir, the second dir is not scanned and no warning is issued.
+        preconditionCall.write(info(info -> info
+                .addModelDirs("%ITF_DIR/some-unknown-dir")
+                .addModelDirs("%ITF_DIR/models")));
+        writeTransferFileAndModel(preconditionCall, "ilivalidator/transfer.xtf");
+        preconditionCall.halfClose();
+
+        ValidationResult preconditionResult = readResponse(preconditionCall, "model_dir_invalid_log.xtf");
+        assertTrue(preconditionResult.success, "Validation should have succeeded. Log:\n" + preconditionResult.log);
+        // Full line in log file: "Warning: Folder [path] doesn't exist; ignored"
+        assertTrue(preconditionResult.log.contains("some-unknown-dir " + missingFolderWarning), "Precondition: The warning should mention the missing model dir. Log:\n" + preconditionResult.log);
+
+        var call = client.validate();
+
+        // Include empty repository dir to test that the tool does not warn about valid dirs.
+        call.write(info(info -> info
+                .addModelDirs("%ITF_DIR/repository")
+                .addModelDirs("%ITF_DIR/models")));
+        writeTransferFileAndModel(call, "ilivalidator/transfer.xtf");
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "model_dir_valid_log.xtf");
+        assertTrue(result.success, "Validation should have succeeded. Log:\n" + result.log);
+        assertFalse(result.log.contains(missingFolderWarning), "The tool should not warn about valid model dirs. Log:\n" + result.log);
+    }
+
+    @Test
     public void testValidateFailsWithInvalidData() throws Exception {
         var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
         var call = client.validate();

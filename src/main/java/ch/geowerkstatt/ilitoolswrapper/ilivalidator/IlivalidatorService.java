@@ -42,6 +42,13 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     // Session subfolder for received MODEL_FILEs, addressed as %ITF_DIR/models in the model dirs.
     private static final String MODEL_FILES_SUBFOLDER = "models";
 
+    // Session subfolders that can be configured as model dirs.
+    private static final List<String> SESSION_SUBFOLDERS = List.of(MODEL_FILES_SUBFOLDER, RepositoryArchiveExtractor.REPOSITORY_SUBFOLDER);
+
+    // Keeps only the official model repository of the tool default "%ITF_DIR;http://models.interlis.ch/;%JAR_DIR/ilimodels"
+    // as the %ITF_DIR does not contain model files and %JAR_DIR/ilimodels does not exist and upgrades the URL to HTTPS.
+    private static final List<String> DEFAULT_MODEL_DIRS = List.of("https://models.interlis.ch/");
+
     private static final Logger LOGGER = Logger.getLogger(IlivalidatorService.class.getName());
     private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
     private final FileManager fileManager;
@@ -60,7 +67,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     public IlivalidatorService(FileManager fileManager, IlitoolsRunner ilitoolsRunner, PrivateNetworkPolicy privateNetworkPolicy, PluginCatalog pluginCatalog) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
-        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy);
+        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
         this.pluginCatalog = pluginCatalog;
     }
 
@@ -144,6 +151,14 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             } catch (IllegalStateException e) {
                 LOGGER.log(Level.SEVERE, "Cannot serve the request.", e);
                 cancelWithError(Status.ABORTED.withDescription(e.getMessage()));
+                return;
+            }
+
+            try {
+                files.setupSessionDirectory(SESSION_SUBFOLDERS);
+            } catch (IOException e) {
+                LOGGER.log(Level.SEVERE, "Failed to set up session directory.", e);
+                cancelWithError(Status.ABORTED.withDescription("Failed to set up session directory."));
                 return;
             }
 
