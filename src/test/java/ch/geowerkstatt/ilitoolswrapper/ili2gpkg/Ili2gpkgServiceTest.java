@@ -189,7 +189,7 @@ public final class Ili2gpkgServiceTest {
         assertFalse(args.contains("--importTid"));
         assertFalse(args.contains("--strokeArcs"));
         // The Ili2gpkgService falls back to the default model dir if no model dirs are specified.
-        assertArgumentWithValue(args, "--modeldir", "%ILI_FROM_DB;http://models.interlis.ch/");
+        assertArgumentWithValue(args, "--modeldir", "%ILI_FROM_DB;https://models.interlis.ch/");
         assertFalse(args.contains("--metaConfig"));
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);

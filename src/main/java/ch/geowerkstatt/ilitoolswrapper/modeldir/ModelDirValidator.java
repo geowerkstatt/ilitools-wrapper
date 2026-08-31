@@ -25,19 +25,19 @@ public final class ModelDirValidator {
 
     private final Set<String> allowedPlaceholders;
     private final PrivateNetworkPolicy privateNetworkPolicy;
-    private final String defaultModelDir;
+    private final List<String> defaultModelDirs;
 
     /**
      * Creates a validator for a single tool.
      *
      * @param allowedPlaceholders the tool placeholders accepted as entries, for example {@code %ITF_DIR}
      * @param privateNetworkPolicy whether URLs that resolve into non-public address ranges are accepted
-     * @param defaultModelDir the default modeldir to use if no value is specified
+     * @param defaultModelDirs the default modeldir values to use if no value is specified
      */
-    public ModelDirValidator(Set<String> allowedPlaceholders, PrivateNetworkPolicy privateNetworkPolicy, String defaultModelDir) {
+    public ModelDirValidator(Set<String> allowedPlaceholders, PrivateNetworkPolicy privateNetworkPolicy, List<String> defaultModelDirs) {
         this.allowedPlaceholders = Set.copyOf(allowedPlaceholders);
         this.privateNetworkPolicy = privateNetworkPolicy;
-        this.defaultModelDir = defaultModelDir;
+        this.defaultModelDirs = defaultModelDirs;
     }
 
     /**
@@ -48,14 +48,11 @@ public final class ModelDirValidator {
      * @throws IllegalArgumentException if an entry is neither an allowed placeholder nor an acceptable {@code http(s)} URL
      */
     public String validateAndJoin(List<String> modelDirs) {
-        if (modelDirs.isEmpty()) {
-            return defaultModelDir;
-        }
-
-        for (String modelDir : modelDirs) {
+        List<String> modelDirsOrDefault = modelDirs.isEmpty() ? defaultModelDirs : modelDirs;
+        for (String modelDir : modelDirsOrDefault) {
             validateEntry(modelDir);
         }
-        return String.join(ENTRY_SEPARATOR, modelDirs);
+        return String.join(ENTRY_SEPARATOR, modelDirsOrDefault);
     }
 
     /**

@@ -46,8 +46,8 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     private static final List<String> SESSION_SUBFOLDERS = List.of(MODEL_FILES_SUBFOLDER, RepositoryArchiveExtractor.REPOSITORY_SUBFOLDER);
 
     // Keeps only the official model repository of the tool default "%ITF_DIR;http://models.interlis.ch/;%JAR_DIR/ilimodels"
-    // as the %ITF_DIR does not contain model files and %JAR_DIR/ilimodels does not exist.
-    private static final String DEFAULT_MODEL_DIR = "http://models.interlis.ch/";
+    // as the %ITF_DIR does not contain model files and %JAR_DIR/ilimodels does not exist and upgrades the URL to HTTPS.
+    private static final List<String> DEFAULT_MODEL_DIRS = List.of("https://models.interlis.ch/");
 
     private static final Logger LOGGER = Logger.getLogger(IlivalidatorService.class.getName());
     private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
@@ -67,7 +67,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     public IlivalidatorService(FileManager fileManager, IlitoolsRunner ilitoolsRunner, PrivateNetworkPolicy privateNetworkPolicy, PluginCatalog pluginCatalog) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
-        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy, DEFAULT_MODEL_DIR);
+        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
         this.pluginCatalog = pluginCatalog;
     }
 
