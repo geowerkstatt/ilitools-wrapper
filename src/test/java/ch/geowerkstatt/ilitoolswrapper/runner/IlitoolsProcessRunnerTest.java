@@ -31,7 +31,7 @@ public final class IlitoolsProcessRunnerTest {
 
         new IlitoolsProcessRunner()
                 .run(IlitoolsRunner.Tool.ILIVALIDATOR, defaultVersion, List.of("--version"),
-                        new IlitoolsRunner.Timeout(30, TimeUnit.SECONDS))
+                        new IlitoolsRunner.Timeout(30, TimeUnit.SECONDS), false)
                 .get();
     }
 
@@ -41,6 +41,6 @@ public final class IlitoolsProcessRunnerTest {
 
         // Also covers traversal attempts: a value that matched no scanned directory name never becomes a path.
         assertThrows(IllegalArgumentException.class,
-                () -> runner.run(IlitoolsRunner.Tool.ILIVALIDATOR, "../escape", List.of("--version"), null));
+                () -> runner.run(IlitoolsRunner.Tool.ILIVALIDATOR, "../escape", List.of("--version"), null, false));
     }
 }

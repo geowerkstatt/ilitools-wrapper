@@ -39,12 +39,13 @@ public interface IlitoolsRunner {
      *                    a non-empty value must come from {@link #availableVersions}
      * @param args the command-line arguments passed to the tool, in order
      * @param timeout an optional {@link Timeout} specifying the maximum duration to wait for the process to complete
+     * @param useSessionCache whether to set up a cache directory for the tool execution
      * @return a CompletableFuture that completes or fails when the process exits or times out
      * @throws IOException if the tool cannot be located or started
      * @throws IllegalArgumentException if a non-empty {@code toolVersion} is not in {@link #availableVersions}
      * @throws IllegalStateException if the default version cannot be resolved or its jar is missing
      */
-    CompletableFuture<Void> run(Tool tool, String toolVersion, List<String> args, @Nullable Timeout timeout) throws IOException;
+    CompletableFuture<Void> run(Tool tool, String toolVersion, List<String> args, @Nullable Timeout timeout, boolean useSessionCache) throws IOException;
 
     /**
      * The versions of the given tool this deployment offers, which is what a request may select.
