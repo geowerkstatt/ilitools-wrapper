@@ -186,6 +186,7 @@ listOf(tasks.run, tasks.test).forEach { task ->
         environment("ILIVALIDATOR_VERSION", ilivalidatorVersion.get())
         // Keep the INTERLIS model cache inside the build directory instead of the user home.
         environment("ILI_CACHE", layout.buildDirectory.dir("ilicache").get().asFile.absolutePath)
+        environment("SESSION_CACHE_DIR", layout.buildDirectory.dir("ilicache-sessions").get().asFile.absolutePath)
     }
 }
 

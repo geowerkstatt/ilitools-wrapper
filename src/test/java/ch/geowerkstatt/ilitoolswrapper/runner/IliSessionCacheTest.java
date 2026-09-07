@@ -13,12 +13,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class IliSessionCacheTest {
     @TempDir
-    Path tempDir;
+    Path sharedTempDir;
+    @TempDir
+    Path sessionTempParent;
 
     @Test
     public void testSetupSessionCacheDir() throws Exception {
         Path sessionCacheDir;
-        try (IliSessionCache sessionCache = new IliSessionCache(null)) {
+        try (IliSessionCache sessionCache = new IliSessionCache(null, null)) {
             sessionCacheDir = sessionCache.setupSessionCacheDir();
             assertNotNull(sessionCacheDir);
             assertTrue(Files.exists(sessionCacheDir));
@@ -29,9 +31,9 @@ public class IliSessionCacheTest {
 
     @Test
     public void testSetupSessionCacheDirWithSharedCache() throws Exception {
-        Files.writeString(tempDir.resolve("testfile.txt"), "test file content");
+        Files.writeString(sharedTempDir.resolve("testfile.txt"), "test file content");
         Path sessionCacheDir;
-        try (IliSessionCache sessionCache = new IliSessionCache(tempDir)) {
+        try (IliSessionCache sessionCache = new IliSessionCache(sharedTempDir, sessionTempParent)) {
             sessionCacheDir = sessionCache.setupSessionCacheDir();
             assertNotNull(sessionCacheDir);
             assertTrue(Files.exists(sessionCacheDir.resolve("testfile.txt")), "Shared cache file should be copied to session cache");
@@ -39,7 +41,7 @@ public class IliSessionCacheTest {
         }
 
         assertFalse(Files.exists(sessionCacheDir), "Closing the IliSessionCache should delete the session cache directory");
-        assertTrue(Files.exists(tempDir.resolve("testfile.txt")), "Shared cache file should still exist after closing the IliSessionCache");
+        assertTrue(Files.exists(sharedTempDir.resolve("testfile.txt")), "Shared cache file should still exist after closing the IliSessionCache");
     }
 
     @Test
@@ -47,36 +49,36 @@ public class IliSessionCacheTest {
         final String folderName = "testfolder";
         final String fileName = "newfile.txt";
         Path sessionCacheDir;
-        try (IliSessionCache sessionCache = new IliSessionCache(tempDir)) {
+        try (IliSessionCache sessionCache = new IliSessionCache(sharedTempDir, sessionTempParent)) {
             sessionCacheDir = sessionCache.setupSessionCacheDir();
             Files.createDirectories(sessionCacheDir.resolve(folderName));
             Files.writeString(sessionCacheDir.resolve(folderName, fileName), "new file content");
             sessionCache.writeToSharedCache();
         }
 
-        assertTrue(Files.exists(tempDir.resolve(folderName, fileName)), "New file should be written back to shared cache");
-        assertEquals("new file content", Files.readString(tempDir.resolve(folderName, fileName)));
+        assertTrue(Files.exists(sharedTempDir.resolve(folderName, fileName)), "New file should be written back to shared cache");
+        assertEquals("new file content", Files.readString(sharedTempDir.resolve(folderName, fileName)));
     }
 
     @Test
     public void testWriteToSharedCacheOverwritesExisting() throws Exception {
-        Files.writeString(tempDir.resolve("updated.txt"), "old file content");
+        Files.writeString(sharedTempDir.resolve("updated.txt"), "old file content");
 
         Path sessionCacheDir;
-        try (IliSessionCache sessionCache = new IliSessionCache(tempDir)) {
+        try (IliSessionCache sessionCache = new IliSessionCache(sharedTempDir, sessionTempParent)) {
             sessionCacheDir = sessionCache.setupSessionCacheDir();
             Files.writeString(sessionCacheDir.resolve("updated.txt"), "new file content");
             sessionCache.writeToSharedCache();
         }
 
-        assertEquals("new file content", Files.readString(tempDir.resolve("updated.txt")));
+        assertEquals("new file content", Files.readString(sharedTempDir.resolve("updated.txt")));
     }
 
     @Test
     public void testWriteToSharedCacheIgnoresJdbc() throws Exception {
         final String folderName = "jdbc&003asqlite&003aexample.gpkg";
         Path sessionCacheDir;
-        try (IliSessionCache sessionCache = new IliSessionCache(tempDir)) {
+        try (IliSessionCache sessionCache = new IliSessionCache(sharedTempDir, sessionTempParent)) {
             sessionCacheDir = sessionCache.setupSessionCacheDir();
 
             Path folderPath = sessionCacheDir.resolve(folderName);
@@ -85,6 +87,6 @@ public class IliSessionCacheTest {
             sessionCache.writeToSharedCache();
         }
 
-        assertFalse(Files.exists(tempDir.resolve(folderName)), "Folder starting with 'jdbc&003a' should not be written back to shared cache");
+        assertFalse(Files.exists(sharedTempDir.resolve(folderName)), "Folder starting with 'jdbc&003a' should not be written back to shared cache");
     }
 }

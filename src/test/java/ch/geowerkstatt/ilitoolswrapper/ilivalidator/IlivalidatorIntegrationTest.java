@@ -245,10 +245,13 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
             var cacheDir = System.getenv("ILI_CACHE");
             assertNotNull(cacheDir, "The test task must set ILI_CACHE to a shared cache directory.");
 
-            // start with an empty ILI_CACHE
+            // Start with an empty ILI_CACHE, but keep the directory itself since it is shared by all tests.
             Path cachePath = Path.of(cacheDir);
-            if (Files.exists(cachePath)) {
-                Files.walkFileTree(cachePath, new DeleteFileVisitor());
+            Files.createDirectories(cachePath);
+            try (var entries = Files.newDirectoryStream(cachePath)) {
+                for (Path entry : entries) {
+                    Files.walkFileTree(entry, new DeleteFileVisitor());
+                }
             }
 
             var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
@@ -264,7 +267,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
                 writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer.xtf");
             }
 
-            // start all calls in parallel
+            // Start all validations in parallel.
             for (var call : calls) {
                 call.halfClose();
             }

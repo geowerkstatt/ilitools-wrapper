@@ -54,17 +54,19 @@ WORKDIR ${HOME}
 
 ARG ILI2GPKG_VERSION
 ARG ILIVALIDATOR_VERSION
+ENV ILI_CACHE_BASE=/var/cache/ilicache
 ENV ILI2GPKG_VERSION=${ILI2GPKG_VERSION} \
     ILI2GPKG_HOME=/opt/ili2gpkg \
     ILIVALIDATOR_VERSION=${ILIVALIDATOR_VERSION} \
     ILIVALIDATOR_HOME=/opt/ilivalidator \
     ILITOOLS_PLUGINS_DIR=/plugins \
-    ILI_CACHE=/var/cache/ilicache \
+    ILI_CACHE=${ILI_CACHE_BASE}/shared \
+    SESSION_CACHE_DIR=${ILI_CACHE_BASE}/sessions \
     PROCESSING_DIR=/app/processing
 
-# Cache dir is a named volume target by convention; persisting it across restarts avoids
-# re-downloading INTERLIS models from models.interlis.ch on every worker recycle.
-VOLUME ${ILI_CACHE}
+# Persist INTERLIS model cache across restarts
+# Shared and session cache are in the same volume to allow moving session cache entries back atomically.
+VOLUME ${ILI_CACHE_BASE}
 
 # Set default locale
 ENV LANG=C.UTF-8
@@ -77,8 +79,8 @@ RUN groupadd --gid=$APP_UID app && useradd --uid=$APP_UID --gid=$APP_UID --creat
 # plugin needs no new image, and an empty directory means no plugin is on offer. It deliberately does not live
 # under ILIVALIDATOR_HOME: <jarDir>/plugins is the tool default and would load every jar on every run,
 # regardless of what a request selected.
-RUN mkdir -p ${ILI_CACHE} ${PROCESSING_DIR} ${ILITOOLS_PLUGINS_DIR} \
-    && chown -R $APP_UID:$APP_UID ${ILI_CACHE} ${PROCESSING_DIR} ${ILITOOLS_PLUGINS_DIR}
+RUN mkdir -p ${ILI_CACHE} ${SESSION_CACHE_DIR} ${PROCESSING_DIR} ${ILITOOLS_PLUGINS_DIR} \
+    && chown -R $APP_UID:$APP_UID ${ILI_CACHE} ${SESSION_CACHE_DIR} ${PROCESSING_DIR} ${ILITOOLS_PLUGINS_DIR}
 
 USER $APP_UID
 
