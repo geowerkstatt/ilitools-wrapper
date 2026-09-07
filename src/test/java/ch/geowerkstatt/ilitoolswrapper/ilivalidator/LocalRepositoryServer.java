@@ -20,18 +20,27 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 final class LocalRepositoryServer implements AutoCloseable {
     private static final String RESOURCE_DIRECTORY = "ilivalidator/repository/";
-    private static final Set<String> SERVED_FILES = Set.of("ilidata.xml", "test_profile.toml");
 
     private final HttpServer server;
     private final ConcurrentLinkedQueue<String> requestedPaths = new ConcurrentLinkedQueue<>();
+    private final Set<String> servedFiles;
 
-    private LocalRepositoryServer(HttpServer server) {
+    private LocalRepositoryServer(HttpServer server, Set<String> servedFiles) {
         this.server = server;
+        this.servedFiles = servedFiles;
     }
 
     static LocalRepositoryServer start() throws IOException {
+        return start(Set.of("ilidata.xml", "test_profile.toml"));
+    }
+
+    static LocalRepositoryServer startWithModels() throws IOException {
+        return start(Set.of("ilidata.xml", "test_profile.toml", "ilimodels.xml", "model.ili"));
+    }
+
+    private static LocalRepositoryServer start(Set<String> servedFiles) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        LocalRepositoryServer repository = new LocalRepositoryServer(server);
+        LocalRepositoryServer repository = new LocalRepositoryServer(server, servedFiles);
         server.createContext("/", repository::handle);
         server.start();
         return repository;
@@ -56,7 +65,7 @@ final class LocalRepositoryServer implements AutoCloseable {
 
         // Only the known fixture files are served, which also rules out any path traversal.
         String fileName = path.startsWith("/") ? path.substring(1) : path;
-        if (!SERVED_FILES.contains(fileName)) {
+        if (!servedFiles.contains(fileName)) {
             exchange.sendResponseHeaders(404, -1);
             exchange.close();
             return;

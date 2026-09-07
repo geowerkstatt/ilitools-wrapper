@@ -2,6 +2,7 @@ package ch.geowerkstatt.ilitoolswrapper.ilivalidator;
 
 import ch.geowerkstatt.ilitoolswrapper.IlitoolsIntegrationTestBase;
 import ch.geowerkstatt.ilitoolswrapper.IntegrationTestSupport;
+import ch.geowerkstatt.ilitoolswrapper.files.DeleteFileVisitor;
 import ch.geowerkstatt.ilitoolswrapper.files.FilesystemFileManager;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
 import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
@@ -38,10 +39,7 @@ import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(value = 30, unit = TimeUnit.SECONDS)
 public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBase {
@@ -238,6 +236,45 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
             List<String> requestedPaths = repository.requestedPaths();
             assertTrue(requestedPaths.contains("/ilidata.xml"), "The tool should have read the repository index. Requested: " + requestedPaths);
             assertTrue(requestedPaths.contains("/test_profile.toml"), "The tool should have read the profile of the repository. Requested: " + requestedPaths);
+        }
+    }
+
+    @Test
+    public void testParallelValidationsCanShareCache() throws Exception {
+        try (LocalRepositoryServer repository = LocalRepositoryServer.startWithModels()) {
+            var cacheDir = System.getenv("ILI_CACHE");
+            assertNotNull(cacheDir, "The test task must set ILI_CACHE to a shared cache directory.");
+
+            // start with an empty ILI_CACHE
+            Path cachePath = Path.of(cacheDir);
+            if (Files.exists(cachePath)) {
+                Files.walkFileTree(cachePath, new DeleteFileVisitor());
+            }
+
+            var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+            var calls = List.of(
+                    client.validate(),
+                    client.validate(),
+                    client.validate(),
+                    client.validate()
+            );
+
+            for (var call : calls) {
+                call.write(info(info -> info.addModelDirs(repository.baseUrl())));
+                writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer.xtf");
+            }
+
+            // start all calls in parallel
+            for (var call : calls) {
+                call.halfClose();
+            }
+
+            for (int i = 0; i < calls.size(); i++) {
+                var call = calls.get(i);
+                ValidationResult result = readResponse(call, "log_parallel_" + i + ".xtf");
+                assertTrue(result.success, "Validation failed. Log:\n" + result.log);
+                assertNotEquals("", result.log, "Log is empty");
+            }
         }
     }
 

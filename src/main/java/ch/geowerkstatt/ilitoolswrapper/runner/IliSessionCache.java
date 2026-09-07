@@ -29,13 +29,17 @@ public final class IliSessionCache implements Closeable {
     /**
      * Creates a new {@link IliSessionCache} instance.
      */
-    public IliSessionCache() {
+    IliSessionCache(@Nullable Path sharedCacheDir) {
+        this.sharedCacheDir = sharedCacheDir;
+    }
+
+    /**
+     * Creates a new {@link IliSessionCache} instance using the "ILI_CACHE" environment variable as the shared cache dir.
+     */
+    public static IliSessionCache fromEnvironment() {
         String iliCacheEnv = System.getenv("ILI_CACHE");
-        if (iliCacheEnv != null && !iliCacheEnv.isEmpty()) {
-            this.sharedCacheDir = Path.of(iliCacheEnv);
-        } else {
-            this.sharedCacheDir = null;
-        }
+        Path sharedCacheDir = (iliCacheEnv != null && !iliCacheEnv.isEmpty()) ? Path.of(iliCacheEnv) : null;
+        return new IliSessionCache(sharedCacheDir);
     }
 
     /**

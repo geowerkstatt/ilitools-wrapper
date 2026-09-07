@@ -46,7 +46,7 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
         processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD);
 
-        IliSessionCache sessionCache = useSessionCache ? new IliSessionCache() : null;
+        IliSessionCache sessionCache = useSessionCache ? IliSessionCache.fromEnvironment() : null;
         try {
             if (sessionCache != null) {
                 Path sessionCacheDir = sessionCache.setupSessionCacheDir();
