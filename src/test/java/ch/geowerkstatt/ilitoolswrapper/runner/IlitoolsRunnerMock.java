@@ -10,7 +10,7 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 
 public final class IlitoolsRunnerMock implements IlitoolsRunner {
-    public record Arguments(Tool tool, String toolVersion, List<String> args, @Nullable Timeout timeout) { }
+    public record Arguments(Tool tool, String toolVersion, List<String> args, @Nullable Timeout timeout, boolean useSessionCache) { }
 
     private @Nullable Arguments lastArguments;
     private final List<Arguments> allArguments = new ArrayList<>();
@@ -20,8 +20,8 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
 
     @Override
     @NonNull
-    public CompletableFuture<Void> run(@NonNull Tool tool, @NonNull String toolVersion, @NonNull List<String> args, @Nullable Timeout timeout) {
-        Arguments arguments = new Arguments(tool, toolVersion, List.copyOf(args), timeout);
+    public CompletableFuture<Void> run(@NonNull Tool tool, @NonNull String toolVersion, @NonNull List<String> args, @Nullable Timeout timeout, boolean useSessionCache) {
+        Arguments arguments = new Arguments(tool, toolVersion, List.copyOf(args), timeout, useSessionCache);
         lastArguments = arguments;
         allArguments.add(arguments);
         return exception == null ? CompletableFuture.completedFuture(null) : CompletableFuture.failedFuture(exception);

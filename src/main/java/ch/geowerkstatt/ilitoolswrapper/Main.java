@@ -7,6 +7,7 @@ import ch.geowerkstatt.ilitoolswrapper.ili2gpkg.Ili2gpkgService;
 import ch.geowerkstatt.ilitoolswrapper.ilivalidator.IlivalidatorService;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
 import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
+import ch.geowerkstatt.ilitoolswrapper.runner.IliSessionCache;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsProcessRunner;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import io.grpc.protobuf.services.ProtoReflectionServiceV1;
@@ -20,6 +21,8 @@ public final class Main {
      * Application entry point.
      */
     static void main() throws InterruptedException, IOException {
+        IliSessionCache.cleanupOrphanedSessionCaches();
+
         final FileManager fileManager = new FilesystemFileManager();
         final IlitoolsRunner ilitoolsRunner = new IlitoolsProcessRunner();
         final PrivateNetworkPolicy privateNetworkPolicy = PrivateNetworkPolicy.fromEnvironment();

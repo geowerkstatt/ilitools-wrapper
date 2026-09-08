@@ -35,7 +35,7 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
     private final Map<Tool, Set<String>> versionsByTool = new ConcurrentHashMap<>();
 
     @Override
-    public CompletableFuture<Void> run(Tool tool, String toolVersion, List<String> args, @Nullable Timeout timeout) throws IOException {
+    public CompletableFuture<Void> run(Tool tool, String toolVersion, List<String> args, @Nullable Timeout timeout, boolean useSessionCache) throws IOException {
         // Resolved and validated once, up front: buildCommand/findTool then only ever see an already-valid
         // version, the cache is keyed by that effective version (no duplicate entry for the default), and
         // every failure message below names the version that actually ran.
@@ -46,12 +46,23 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
         processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD);
 
-        Process process = processBuilder.start();
-        CompletableFuture<Process> processFuture = process.onExit();
-        if (timeout != null) {
-            processFuture = processFuture.completeOnTimeout(process, timeout.duration(), timeout.unit());
+        IliSessionCache sessionCache = useSessionCache ? IliSessionCache.fromEnvironment() : null;
+        try {
+            if (sessionCache != null) {
+                Path sessionCacheDir = sessionCache.setupSessionCacheDir();
+                processBuilder.environment().put("ILI_CACHE", sessionCacheDir.toString());
+            }
+
+            Process process = processBuilder.start();
+            CompletableFuture<Process> processFuture = process.onExit();
+            if (timeout != null) {
+                processFuture = processFuture.completeOnTimeout(process, timeout.duration(), timeout.unit());
+            }
+            return processFuture.thenCompose(p -> handleProcessResult(p, tool, version, sessionCache));
+        } catch (Exception e) {
+            closeSessionCache(sessionCache, tool, version);
+            throw e;
         }
-        return processFuture.thenCompose(p -> handleProcessResult(p, tool, version));
     }
 
     @Override
@@ -93,18 +104,42 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         return version;
     }
 
-    private CompletionStage<Void> handleProcessResult(Process process, Tool tool, String version) {
-        if (process.isAlive()) {
-            process.destroyForcibly();
-            return CompletableFuture.failedStage(new TimeoutException("Tool " + tool + " " + version + " timed out."));
-        }
+    private CompletionStage<Void> handleProcessResult(Process process, Tool tool, String version, @Nullable IliSessionCache sessionCache) {
+        try {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+                return CompletableFuture.failedStage(new TimeoutException("Tool " + tool + " " + version + " timed out."));
+            }
 
-        if (process.exitValue() != 0) {
-            String errorMessage = "Tool " + tool + " " + version + " exited with code " + process.exitValue();
-            return CompletableFuture.failedStage(new RuntimeException(errorMessage));
-        }
+            if (process.exitValue() != 0) {
+                String errorMessage = "Tool " + tool + " " + version + " exited with code " + process.exitValue();
+                return CompletableFuture.failedStage(new RuntimeException(errorMessage));
+            }
 
-        return CompletableFuture.completedStage(null);
+            if (sessionCache != null) {
+                try {
+                    // Only write back to the shared cache if the process succeeded, so a run that failed because of
+                    // incomplete files does not overwrite the shared cache with a broken state.
+                    sessionCache.writeToSharedCache();
+                } catch (IOException e) {
+                    LOGGER.log(Level.WARNING, "Failed to write session cache back to shared cache for tool " + tool + " " + version + ".", e);
+                }
+            }
+
+            return CompletableFuture.completedStage(null);
+        } finally {
+            closeSessionCache(sessionCache, tool, version);
+        }
+    }
+
+    private static void closeSessionCache(@Nullable IliSessionCache sessionCache, Tool tool, String version) {
+        if (sessionCache != null) {
+            try {
+                sessionCache.close();
+            } catch (IOException e) {
+                LOGGER.log(Level.WARNING, "Failed to close session cache for tool " + tool + " " + version + ".", e);
+            }
+        }
     }
 
     private List<String> buildCommand(Tool tool, String version, List<String> args) {

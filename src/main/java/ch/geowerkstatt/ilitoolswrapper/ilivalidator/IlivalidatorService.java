@@ -83,9 +83,9 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             // The empty string probes the deployment default including its membership in the offered set;
             // every offered version is probed as well, so a defective additional jar surfaces here instead
             // of masquerading as a failed validation of some client's data.
-            ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, "", List.of("--version"), timeout).get();
+            ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, "", List.of("--version"), timeout, false).get();
             for (String version : ilitoolsRunner.availableVersions(IlitoolsRunner.Tool.ILIVALIDATOR)) {
-                ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, version, List.of("--version"), timeout).get();
+                ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, version, List.of("--version"), timeout, false).get();
             }
             return HealthCheckResponse.ServingStatus.SERVING;
         } catch (InterruptedException e) {
@@ -259,7 +259,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                     return;
                 }
 
-                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, requestedToolVersion, parsedArguments.get(), null)
+                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, requestedToolVersion, parsedArguments.get(), null, true)
                         .handleAsync((_, throwable) -> {
                             if (throwable != null) {
                                 LOGGER.warning("Validating data with ilivalidator failed: " + throwable);

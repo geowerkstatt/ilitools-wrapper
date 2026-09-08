@@ -87,9 +87,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             // The empty string probes the deployment default including its membership in the offered set;
             // every offered version is probed as well, so a defective additional jar surfaces here instead
             // of masquerading as a failed validation of some client's data.
-            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, "", List.of("--version"), timeout).get();
+            ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, "", List.of("--version"), timeout, false).get();
             for (String version : ilitoolsRunner.availableVersions(IlitoolsRunner.Tool.ILI2GPKG)) {
-                ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, version, List.of("--version"), timeout).get();
+                ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, version, List.of("--version"), timeout, false).get();
             }
             return HealthCheckResponse.ServingStatus.SERVING;
         } catch (InterruptedException e) {
@@ -262,7 +262,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
 
                 ProcessingArguments processingArguments = parsedArguments.get();
-                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, requestedToolVersion, processingArguments.arguments(), null)
+                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, requestedToolVersion, processingArguments.arguments(), null, true)
                         .handleAsync((_, throwable) -> {
                             if (throwable != null) {
                                 LOGGER.warning("Processing data with ili2gpkg failed: " + throwable);
