@@ -58,7 +58,17 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
             if (timeout != null) {
                 processFuture = processFuture.completeOnTimeout(process, timeout.duration(), timeout.unit());
             }
-            return processFuture.thenCompose(p -> handleProcessResult(p, tool, version, sessionCache));
+            CompletableFuture<Void> completion = processFuture.thenCompose(p -> handleProcessResult(p, tool, version, sessionCache));
+
+            // Forcibly end the process when the future is canceled from outside, skipping handleProcessResult.
+            completion.exceptionally(_ -> {
+                if (completion.isCancelled()) {
+                    process.destroyForcibly();
+                    closeSessionCache(sessionCache, tool, version);
+                }
+                return null;
+            });
+            return completion;
         } catch (Exception e) {
             closeSessionCache(sessionCache, tool, version);
             throw e;

@@ -22,6 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -606,6 +607,41 @@ public final class IlivalidatorServiceTest {
         assertEquals("", arguments.toolVersion(), "Without a selection the deployment default must run.");
 
         assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
+    }
+
+    @Test
+    void clientCancellationCancelsToolRun() throws Exception {
+        ilitoolsRunner.holdNextRun();
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
+        requestObserver.onNext(chunk("data"));
+        InMemoryProcessingFile transferFile = fileManager.lastCreatedFile();
+        requestObserver.onCompleted();
+
+        assertTrue(responseObserver.hasCancelHandler(), "The service must register a cancel handler for a server call.");
+        CompletableFuture<Void> pendingRun = ilitoolsRunner.pendingRun();
+        assertNotNull(pendingRun, "The runner should have been invoked.");
+        assertFalse(pendingRun.isDone(), "The tool should be running before cancellation.");
+
+        responseObserver.cancel();
+
+        assertTrue(pendingRun.isCancelled(), "Cancelling the call must cancel the tool run so the process is destroyed.");
+        assertTrue(waitUntil(transferFile::isClosed), "The session files should be cleaned up after cancellation.");
+        assertNull(responseObserver.error(), "A cancelled call must not receive an error response.");
+        assertTrue(responseObserver.values().isEmpty(), "A cancelled call must not receive any response.");
+    }
+
+    private static boolean waitUntil(java.util.function.BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            if (condition.getAsBoolean()) {
+                return true;
+            }
+            Thread.sleep(10);
+        }
+        return condition.getAsBoolean();
     }
 
     void assertHasResponses(boolean success, IlivalidatorFileType... expectedFiles) {

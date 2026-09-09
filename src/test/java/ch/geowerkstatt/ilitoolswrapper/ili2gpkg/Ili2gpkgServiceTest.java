@@ -26,6 +26,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -592,6 +593,41 @@ public final class Ili2gpkgServiceTest {
         assertEquals("", arguments.toolVersion(), "Without a selection the deployment default must run.");
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+    }
+
+    @Test
+    void clientCancellationCancelsToolRun() throws Exception {
+        ilitoolsRunner.holdNextRun();
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("data"));
+        InMemoryProcessingFile transferFile = fileManager.lastCreatedFile();
+        requestObserver.onCompleted();
+
+        assertTrue(responseObserver.hasCancelHandler(), "The service must register a cancel handler for a server call.");
+        CompletableFuture<Void> pendingRun = ilitoolsRunner.pendingRun();
+        assertNotNull(pendingRun, "The runner should have been invoked.");
+        assertFalse(pendingRun.isDone(), "The tool should be running before cancellation.");
+
+        responseObserver.cancel();
+
+        assertTrue(pendingRun.isCancelled(), "Cancelling the call must cancel the tool run so the process is destroyed.");
+        assertTrue(waitUntil(transferFile::isClosed), "The session files should be cleaned up after cancellation.");
+        assertNull(responseObserver.error(), "A cancelled call must not receive an error response.");
+        assertTrue(responseObserver.values().isEmpty(), "A cancelled call must not receive any response.");
+    }
+
+    private static boolean waitUntil(java.util.function.BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            if (condition.getAsBoolean()) {
+                return true;
+            }
+            Thread.sleep(10);
+        }
+        return condition.getAsBoolean();
     }
 
     private static void assertArgumentWithValue(List<String> args, String name, String value) {
