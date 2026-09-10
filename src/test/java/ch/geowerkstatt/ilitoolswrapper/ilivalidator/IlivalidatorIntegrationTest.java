@@ -13,6 +13,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateResponse;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsProcessRunner;
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import com.google.protobuf.ByteString;
 import io.grpc.BindableService;
 import io.grpc.Status;
@@ -57,7 +58,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         // The repository of the meta config test is served from localhost, so non-public addresses must be allowed.
         // The plugin catalog is the one the build packs the minimal test plugin into, see the testPluginJar task.
         String catalog = Objects.requireNonNull(System.getenv("TEST_PLUGIN_CATALOG"), "The test task must set TEST_PLUGIN_CATALOG.");
-        return new IlivalidatorService(new FilesystemFileManager(), new IlitoolsProcessRunner(), PrivateNetworkPolicy.ALLOW, new PluginCatalog(Path.of(catalog)));
+        return new IlivalidatorService(new FilesystemFileManager(), new IlitoolsProcessRunner(), PrivateNetworkPolicy.ALLOW, new PluginCatalog(Path.of(catalog)), new IlitoolsRunner.Timeout(30, TimeUnit.SECONDS));
     }
 
     @Test
