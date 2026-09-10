@@ -19,6 +19,7 @@ Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Dock
 | --- | --- | --- |
 | `GRPC_PORT` | `5555` | Port des gRPC-Servers |
 | `PROCESSING_DIR` | `processing` | Basis-Verzeichnis für temporäre Dateien während der Prozessierung |
+| `PROCESSING_TIMEOUT_MINUTES` | `30` | Timeout in Minuten, nach dem eine Prozessierung abgebrochen wird. Kann auf `0` gesetzt werden, um das Timeout zu deaktivieren |
 | `ILI2GPKG_HOME` | Aus Dockerfile oder Gradle `run` Task | Installationsverzeichnis von ili2gpkg, ein Unterordner pro angebotener Version |
 | `ILI2GPKG_VERSION` | Aus Dockerfile oder gradle.properties | Voreinstellung der ili2gpkg-Version, wenn ein Request keine wählt (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)) |
 | `ILIVALIDATOR_HOME` | Aus Dockerfile oder Gradle `run` Task | Installationsverzeichnis von ilivalidator, ein Unterordner pro angebotener Version |

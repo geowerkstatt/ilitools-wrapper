@@ -10,6 +10,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateResponse;
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunnerMock;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
@@ -41,7 +42,7 @@ public final class IlivalidatorServiceTest {
         fileManager = new InMemoryFileManager();
         ilitoolsRunner = new IlitoolsRunnerMock();
         // Private networks are allowed so that the unit tests never depend on name resolution.
-        service = new IlivalidatorService(fileManager, ilitoolsRunner, PrivateNetworkPolicy.ALLOW, new PluginCatalog(pluginRoot));
+        service = new IlivalidatorService(fileManager, ilitoolsRunner, PrivateNetworkPolicy.ALLOW, new PluginCatalog(pluginRoot), new IlitoolsRunner.Timeout(30, TimeUnit.SECONDS));
         responseObserver = new RecordingStreamObserver<>();
     }
 

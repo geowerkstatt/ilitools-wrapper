@@ -16,6 +16,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateResponse;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner.Timeout;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
 import io.grpc.health.v1.HealthCheckResponse;
@@ -57,6 +58,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     private final IlitoolsRunner ilitoolsRunner;
     private final ModelDirValidator modelDirValidator;
     private final PluginCatalog pluginCatalog;
+    private final @Nullable Timeout toolTimeout;
 
     /**
      * Creates a new {@link IlivalidatorService} with the specified file manager and tool runner.
@@ -65,12 +67,19 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
      * @param ilitoolsRunner the IlitoolsRunner to use for running the ilivalidator tool
      * @param privateNetworkPolicy whether model repository URLs may resolve into non-public address ranges
      * @param pluginCatalog the ilivalidator plugins this deployment offers for a request to select
+     * @param toolTimeout the timeout for the ilivalidator process, or {@code null} to disable the timeout
      */
-    public IlivalidatorService(FileManager fileManager, IlitoolsRunner ilitoolsRunner, PrivateNetworkPolicy privateNetworkPolicy, PluginCatalog pluginCatalog) {
+    public IlivalidatorService(
+            FileManager fileManager,
+            IlitoolsRunner ilitoolsRunner,
+            PrivateNetworkPolicy privateNetworkPolicy,
+            PluginCatalog pluginCatalog,
+            @Nullable Timeout toolTimeout) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
         this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
         this.pluginCatalog = pluginCatalog;
+        this.toolTimeout = toolTimeout;
     }
 
     @Override
@@ -272,7 +281,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                     return;
                 }
 
-                var runFuture = ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, requestedToolVersion, parsedArguments.get(), null, true);
+                var runFuture = ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, requestedToolVersion, parsedArguments.get(), toolTimeout, true);
                 this.runFuture = runFuture;
                 var _ = runFuture.handleAsync((_, throwable) -> {
                     if (runFuture.isCancelled()) {

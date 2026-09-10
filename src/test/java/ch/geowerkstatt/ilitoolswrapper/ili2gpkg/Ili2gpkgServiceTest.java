@@ -11,6 +11,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunnerMock;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
@@ -46,7 +47,7 @@ public final class Ili2gpkgServiceTest {
         fileManager = new InMemoryFileManager();
         ilitoolsRunner = new IlitoolsRunnerMock();
         // Private networks are allowed so that the unit tests never depend on name resolution.
-        service = new Ili2gpkgService(fileManager, ilitoolsRunner, PrivateNetworkPolicy.ALLOW, new PluginCatalog(pluginRoot));
+        service = new Ili2gpkgService(fileManager, ilitoolsRunner, PrivateNetworkPolicy.ALLOW, new PluginCatalog(pluginRoot), new IlitoolsRunner.Timeout(30, TimeUnit.SECONDS));
         responseObserver = new RecordingStreamObserver<>();
     }
 
