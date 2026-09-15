@@ -27,8 +27,9 @@ public final class Main {
         final IlitoolsRunner ilitoolsRunner = new IlitoolsProcessRunner();
         final PrivateNetworkPolicy privateNetworkPolicy = PrivateNetworkPolicy.fromEnvironment();
         final PluginCatalog pluginCatalog = PluginCatalog.fromEnvironment();
-        final Ili2gpkgService ili2gpkgService = new Ili2gpkgService(fileManager, ilitoolsRunner, privateNetworkPolicy, pluginCatalog);
-        final IlivalidatorService ilivalidatorService = new IlivalidatorService(fileManager, ilitoolsRunner, privateNetworkPolicy, pluginCatalog);
+        final IlitoolsRunner.Timeout toolTimeout = IlitoolsRunner.Timeout.fromEnvironment();
+        final Ili2gpkgService ili2gpkgService = new Ili2gpkgService(fileManager, ilitoolsRunner, privateNetworkPolicy, pluginCatalog, toolTimeout);
+        final IlivalidatorService ilivalidatorService = new IlivalidatorService(fileManager, ilitoolsRunner, privateNetworkPolicy, pluginCatalog, toolTimeout);
 
         final ServiceHealthCheckManager serviceHealthCheckManager = new ServiceHealthCheckManager(
                 ili2gpkgService,

@@ -16,9 +16,11 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.ValidateResponse;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner.Timeout;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
 import io.grpc.health.v1.HealthCheckResponse;
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.jspecify.annotations.Nullable;
 
@@ -31,6 +33,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -55,6 +58,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     private final IlitoolsRunner ilitoolsRunner;
     private final ModelDirValidator modelDirValidator;
     private final PluginCatalog pluginCatalog;
+    private final @Nullable Timeout toolTimeout;
 
     /**
      * Creates a new {@link IlivalidatorService} with the specified file manager and tool runner.
@@ -63,12 +67,19 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
      * @param ilitoolsRunner the IlitoolsRunner to use for running the ilivalidator tool
      * @param privateNetworkPolicy whether model repository URLs may resolve into non-public address ranges
      * @param pluginCatalog the ilivalidator plugins this deployment offers for a request to select
+     * @param toolTimeout the timeout for the ilivalidator process, or {@code null} to disable the timeout
      */
-    public IlivalidatorService(FileManager fileManager, IlitoolsRunner ilitoolsRunner, PrivateNetworkPolicy privateNetworkPolicy, PluginCatalog pluginCatalog) {
+    public IlivalidatorService(
+            FileManager fileManager,
+            IlitoolsRunner ilitoolsRunner,
+            PrivateNetworkPolicy privateNetworkPolicy,
+            PluginCatalog pluginCatalog,
+            @Nullable Timeout toolTimeout) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
         this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
         this.pluginCatalog = pluginCatalog;
+        this.toolTimeout = toolTimeout;
     }
 
     @Override
@@ -107,12 +118,17 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         private final ProcessingFileSet<IlivalidatorFileType> files = new ProcessingFileSet<>(fileManager);
         private @Nullable ProcessingFile currentFile;
         private @Nullable ValidateRequestInfo info;
+        private @Nullable CompletableFuture<Void> runFuture;
+        private boolean cancelled;
         private String modelDirArgument = "";
         private Set<String> requestedPlugins = Set.of();
         private String requestedToolVersion = "";
 
         ValidateObserver(StreamObserver<ValidateResponse> responseObserver) {
             this.responseObserver = responseObserver;
+            if (responseObserver instanceof ServerCallStreamObserver<ValidateResponse> serverObserver) {
+                serverObserver.setOnCancelHandler(this::onCancel);
+            }
         }
 
         @Override
@@ -259,16 +275,28 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                     return;
                 }
 
-                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, requestedToolVersion, parsedArguments.get(), null, true)
-                        .handleAsync((_, throwable) -> {
-                            if (throwable != null) {
-                                LOGGER.warning("Validating data with ilivalidator failed: " + throwable);
-                            }
+                if (cancelled) {
+                    LOGGER.info("Validation was cancelled before the tool started, cleaning up session files.");
+                    files.deleteAll();
+                    return;
+                }
 
-                            boolean success = throwable == null;
-                            returnResponse(success);
-                            return null;
-                        });
+                var runFuture = ilitoolsRunner.run(IlitoolsRunner.Tool.ILIVALIDATOR, requestedToolVersion, parsedArguments.get(), toolTimeout, true);
+                this.runFuture = runFuture;
+                var _ = runFuture.handleAsync((_, throwable) -> {
+                    if (runFuture.isCancelled()) {
+                        LOGGER.info("Validation was cancelled by the client, cleaning up session files.");
+                        files.deleteAll();
+                        return null;
+                    }
+                    if (throwable != null) {
+                        LOGGER.warning("Validating data with ilivalidator failed: " + throwable);
+                    }
+
+                    boolean success = throwable == null;
+                    returnResponse(success);
+                    return null;
+                });
             } catch (IllegalArgumentException e) {
                 // Reaches here from the plugin materialization, and from the runner's version backstop in case
                 // the offered set ever diverged between the onInfo validation and the start of the tool.
@@ -277,6 +305,14 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Failed to start ilivalidator process.", e);
                 cancelWithError(Status.ABORTED.withDescription("Failed to start ilivalidator process."));
+            }
+        }
+
+        private void onCancel() {
+            cancelled = true;
+            if (runFuture != null) {
+                LOGGER.info("Client cancelled the validation, terminating the ilivalidator process.");
+                runFuture.cancel(true);
             }
         }
 

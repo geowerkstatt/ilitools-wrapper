@@ -16,9 +16,11 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgServiceGrpc;
 import ch.geowerkstatt.ilitoolswrapper.proto.common.StatusUpdate;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
+import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner.Timeout;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
 import io.grpc.health.v1.HealthCheckResponse;
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.jspecify.annotations.Nullable;
 
@@ -31,6 +33,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -59,6 +62,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     private final IlitoolsRunner ilitoolsRunner;
     private final ModelDirValidator modelDirValidator;
     private final PluginCatalog pluginCatalog;
+    private final @Nullable Timeout toolTimeout;
 
     /**
      * Creates a new {@link Ili2gpkgService} with the specified file manager and tool runner.
@@ -67,12 +71,19 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
      * @param ilitoolsRunner the IlitoolsRunner to use for running the ili2gpkg tool
      * @param privateNetworkPolicy whether model repository URLs may resolve into non-public address ranges
      * @param pluginCatalog the plugins this deployment offers for a request to select
+     * @param toolTimeout the timeout for the ili2gpkg process, or {@code null} to disable the timeout
      */
-    public Ili2gpkgService(FileManager fileManager, IlitoolsRunner ilitoolsRunner, PrivateNetworkPolicy privateNetworkPolicy, PluginCatalog pluginCatalog) {
+    public Ili2gpkgService(
+            FileManager fileManager,
+            IlitoolsRunner ilitoolsRunner,
+            PrivateNetworkPolicy privateNetworkPolicy,
+            PluginCatalog pluginCatalog,
+            @Nullable Timeout toolTimeout) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
         this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
         this.pluginCatalog = pluginCatalog;
+        this.toolTimeout = toolTimeout;
     }
 
     @Override
@@ -83,7 +94,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     @Override
     public HealthCheckResponse.ServingStatus getHealthStatus() {
         try {
-            IlitoolsRunner.Timeout timeout = new IlitoolsRunner.Timeout(5, TimeUnit.SECONDS);
+            Timeout timeout = new Timeout(5, TimeUnit.SECONDS);
             // The empty string probes the deployment default including its membership in the offered set;
             // every offered version is probed as well, so a defective additional jar surfaces here instead
             // of masquerading as a failed validation of some client's data.
@@ -111,12 +122,17 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
         private final ProcessingFileSet<Ili2gpkgFileType> files = new ProcessingFileSet<>(fileManager);
         private @Nullable ProcessingFile currentFile;
         private @Nullable ConvertRequestInfo info;
+        private @Nullable CompletableFuture<Void> runFuture;
+        private boolean cancelled;
         private String modelDirArgument = "";
         private Set<String> requestedPlugins = Set.of();
         private String requestedToolVersion = "";
 
         ConvertObserver(StreamObserver<ConvertResponse> responseObserver) {
             this.responseObserver = responseObserver;
+            if (responseObserver instanceof ServerCallStreamObserver<ConvertResponse> serverObserver) {
+                serverObserver.setOnCancelHandler(this::onCancel);
+            }
         }
 
         @Override
@@ -261,17 +277,29 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     return;
                 }
 
-                ProcessingArguments processingArguments = parsedArguments.get();
-                var _ = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, requestedToolVersion, processingArguments.arguments(), null, true)
-                        .handleAsync((_, throwable) -> {
-                            if (throwable != null) {
-                                LOGGER.warning("Processing data with ili2gpkg failed: " + throwable);
-                            }
+                if (cancelled) {
+                    LOGGER.info("Processing was cancelled before the tool started, cleaning up session files.");
+                    files.deleteAll();
+                    return;
+                }
 
-                            boolean success = throwable == null;
-                            returnResponse(success, processingArguments);
-                            return null;
-                        });
+                ProcessingArguments processingArguments = parsedArguments.get();
+                var runFuture = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, requestedToolVersion, processingArguments.arguments(), toolTimeout, true);
+                this.runFuture = runFuture;
+                var _ = runFuture.handleAsync((_, throwable) -> {
+                    if (runFuture.isCancelled()) {
+                        LOGGER.info("Processing was cancelled by the client, cleaning up session files.");
+                        files.deleteAll();
+                        return null;
+                    }
+                    if (throwable != null) {
+                        LOGGER.warning("Processing data with ili2gpkg failed: " + throwable);
+                    }
+
+                    boolean success = throwable == null;
+                    returnResponse(success, processingArguments);
+                    return null;
+                });
             } catch (IllegalArgumentException e) {
                 // Reaches here from the plugin materialization, and from the runner's version backstop in case
                 // the offered set ever diverged between the onInfo validation and the start of the tool.
@@ -280,6 +308,14 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Failed to start ili2gpkg process.", e);
                 cancelWithError(Status.ABORTED.withDescription("Failed to start ili2gpkg process."));
+            }
+        }
+
+        private void onCancel() {
+            cancelled = true;
+            if (runFuture != null) {
+                LOGGER.info("Client cancelled the processing, terminating the ili2gpkg process.");
+                runFuture.cancel(true);
             }
         }
 

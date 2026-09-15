@@ -1,10 +1,13 @@
 package ch.geowerkstatt.ilitoolswrapper.runner;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -42,5 +45,34 @@ public final class IlitoolsProcessRunnerTest {
         // Also covers traversal attempts: a value that matched no scanned directory name never becomes a path.
         assertThrows(IllegalArgumentException.class,
                 () -> runner.run(IlitoolsRunner.Tool.ILIVALIDATOR, "../escape", List.of("--version"), null, false));
+    }
+
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void cancelTerminatesIlitoolsProcess() throws Exception {
+        try (NeverRespondingServer server = NeverRespondingServer.start()) {
+            // Let ilivalidator request the transfer file directly from the server.
+            String transferFile = server.baseUrl() + "transfer.xtf";
+            CompletableFuture<Void> runFuture = new IlitoolsProcessRunner().run(
+                    IlitoolsRunner.Tool.ILIVALIDATOR,
+                    "",
+                    List.of(transferFile),
+                    null,
+                    true);
+            try {
+                // Wait for a client connection to ensure that the tool is running.
+                server.clientConnected().get(30, TimeUnit.SECONDS);
+                assertFalse(runFuture.isDone(), "The tool should be running as it waits for the transfer file.");
+
+                assertTrue(runFuture.cancel(true), "Cancelling the run future should succeed.");
+                assertTrue(runFuture.isCancelled(), "The run future should report cancellation.");
+
+                // The connection drops when the process is terminated.
+                server.clientDisconnected().get(30, TimeUnit.SECONDS);
+            } finally {
+                // Stop the process if an assertion failed.
+                runFuture.cancel(true);
+            }
+        }
     }
 }

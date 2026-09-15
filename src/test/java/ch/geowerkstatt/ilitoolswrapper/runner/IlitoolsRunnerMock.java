@@ -17,6 +17,8 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     private @Nullable Exception exception;
     private Set<String> availableVersions = Set.of();
     private @Nullable Tool versionsQueriedFor;
+    private boolean holdNextRun;
+    private @Nullable CompletableFuture<Void> pendingRun;
 
     @Override
     @NonNull
@@ -24,6 +26,12 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
         Arguments arguments = new Arguments(tool, toolVersion, List.copyOf(args), timeout, useSessionCache);
         lastArguments = arguments;
         allArguments.add(arguments);
+        if (holdNextRun) {
+            holdNextRun = false;
+            CompletableFuture<Void> pending = new CompletableFuture<>();
+            pendingRun = pending;
+            return pending;
+        }
         return exception == null ? CompletableFuture.completedFuture(null) : CompletableFuture.failedFuture(exception);
     }
 
@@ -59,6 +67,23 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
      */
     public void failRunWith(Exception exception) {
         this.exception = exception;
+    }
+
+    /**
+     * Makes the next {@link #run} invocation return a future that never completes on its own, so a test can
+     * observe cancellation. The returned future is available through {@link #pendingRun()}.
+     */
+    public void holdNextRun() {
+        this.holdNextRun = true;
+    }
+
+    /**
+     * Returns the never-completing future handed out for a {@link #holdNextRun()} invocation.
+     *
+     * @return the pending run future, or {@code null} if no run was held
+     */
+    public @Nullable CompletableFuture<Void> pendingRun() {
+        return pendingRun;
     }
 
     /**

@@ -29,7 +29,32 @@ public interface IlitoolsRunner {
      * @param duration the duration of the timeout
      * @param unit the time unit of the duration
      */
-    record Timeout(long duration, TimeUnit unit) { }
+    record Timeout(long duration, TimeUnit unit) {
+        private static final Timeout DEFAULT = new Timeout(30, TimeUnit.MINUTES);
+
+        /**
+         * Reads the timeout from the environment variable {@code PROCESSING_TIMEOUT_MINUTES}. An unset or empty value falls
+         * back to the default (30 minutes) and a value of 0 disables the timeout.
+         *
+         * @return the timeout read from the environment, or the default if not set
+         * @throws IllegalArgumentException if the environment variable is set but cannot be parsed
+         */
+        public static @Nullable Timeout fromEnvironment() {
+            String timeoutStr = System.getenv("PROCESSING_TIMEOUT_MINUTES");
+            if (timeoutStr == null || timeoutStr.isEmpty()) {
+                return DEFAULT;
+            }
+            try {
+                long minutes = Long.parseLong(timeoutStr);
+                if (minutes < 0) {
+                    throw new IllegalArgumentException("Invalid PROCESSING_TIMEOUT_MINUTES. Expected a positive number or 0, got: " + timeoutStr);
+                }
+                return minutes == 0 ? null : new Timeout(minutes, TimeUnit.MINUTES);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid PROCESSING_TIMEOUT_MINUTES. Expected a number, got: " + timeoutStr, e);
+            }
+        }
+    }
 
     /**
      * Runs the given tool with the supplied command-line arguments and returns a future for the process termination.
