@@ -17,6 +17,13 @@ import java.util.logging.Logger;
  * Manages startup and shutdown of a gRPC server.
  */
 public final class IlitoolsWrapperServer {
+    /**
+     * The maximum size of a file chunk sent to clients. Kept well below the 4 MiB a gRPC client accepts by default
+     * so that clients do not have to raise their receive limit. The serialized message is a few bytes larger than
+     * the chunk itself because of the protobuf field tag and length prefix.
+     */
+    public static final int RESPONSE_CHUNK_SIZE = 2 * 1024 * 1024;
+
     private static final Logger LOGGER = Logger.getLogger(IlitoolsWrapperServer.class.getName());
 
     private final Server server;
