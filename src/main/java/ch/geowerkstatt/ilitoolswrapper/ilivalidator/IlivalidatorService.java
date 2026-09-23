@@ -1,5 +1,6 @@
 package ch.geowerkstatt.ilitoolswrapper.ilivalidator;
 
+import ch.geowerkstatt.ilitoolswrapper.IlitoolsWrapperServer;
 import ch.geowerkstatt.ilitoolswrapper.files.FileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.files.ProcessingFileSet;
@@ -467,7 +468,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                                 .build())
                         .build());
 
-                byte[] buffer = new byte[10 * 1024 * 1024];
+                byte[] buffer = new byte[IlitoolsWrapperServer.RESPONSE_CHUNK_SIZE];
                 while (true) {
                     int bytesRead = inputStream.read(buffer);
                     if (bytesRead <= 0) {
