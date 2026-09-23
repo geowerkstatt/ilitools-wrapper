@@ -429,6 +429,7 @@ public final class IlivalidatorServiceTest {
 
     @Test
     void validatePassesReferenceDataOptionsAsArguments() {
+        ilitoolsRunner.useDefaultVersion("1.15.0");
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
         requestObserver.onNext(ValidateRequest.newBuilder()
@@ -633,6 +634,61 @@ public final class IlivalidatorServiceTest {
         assertEquals(IlitoolsRunnerMock.Tool.ILIVALIDATOR, ilitoolsRunner.versionsQueriedFor(), "The service must consult its own tool's versions.");
 
         assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
+    }
+
+    @Test
+    void referenceDataOptionsAreRejectedForAnOlderRequestedVersion() {
+        ilitoolsRunner.offerVersions("1.15.0", "1.14.4");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setToolVersion("1.14.4")
+                        .setScope("449"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        String description = Status.fromThrowable(responseObserver.error()).getDescription();
+        assertNotNull(description);
+        assertTrue(description.contains("1.15.0") && description.contains("1.14.4"), "The rejection should name both versions, but was: " + description);
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected request.");
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
+    }
+
+    @Test
+    void referenceDataOptionsAreRejectedForAnOlderDefaultVersion() {
+        ilitoolsRunner.useDefaultVersion("1.14.4");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setRefMapping("ilidata:DMAV_RefData_Mapping"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
+    }
+
+    @Test
+    void referenceDataOptionsAcceptABuildOfANewerVersion() {
+        ilitoolsRunner.offerVersions("1.15.0", "1.15.1-INTERNAL-GEOWERKSTATT-SNAPSHOT");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setToolVersion("1.15.1-INTERNAL-GEOWERKSTATT-SNAPSHOT")
+                        .setScope("449"))
+                .build());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertArgumentWithValue(arguments.args(), "--scope", "449");
     }
 
     @Test

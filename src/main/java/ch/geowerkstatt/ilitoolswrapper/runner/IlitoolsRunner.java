@@ -80,4 +80,14 @@ public interface IlitoolsRunner {
      *         subdirectory holds the matching jar
      */
     Set<String> availableVersions(Tool tool);
+
+    /**
+     * The version a run of the given tool uses when the request selects none: the deployment default from
+     * {@code {TOOL}_VERSION}.
+     *
+     * @param tool the tool whose default version is resolved
+     * @return the default version, one of {@link #availableVersions}
+     * @throws IllegalStateException if the default version cannot be resolved or is not offered
+     */
+    String defaultVersion(Tool tool);
 }

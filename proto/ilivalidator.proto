@@ -43,12 +43,13 @@ message ValidateRequestInfo {
   // deployment does not offer is rejected with INVALID_ARGUMENT.
   string toolVersion = 10;
   // Extent of the validation passed as --scope, for example the BFS number of a municipality. Selects the
-  // reference data refMapping names for this extent. Empty passes no scope. Supported from ilivalidator
-  // 1.15.0 on; an older selected version fails in the tool.
+  // reference data refMapping names for this extent. Empty passes no scope. Needs ilivalidator 1.15.0 or newer;
+  // for an older version, requested or deployment default, the request is rejected with INVALID_ARGUMENT.
   string scope = 11;
   // Reference data mapping in the form ilidata:<DatasetId>, resolved by the tool through the modelDirs and
   // passed as --refmapping. A field of its own because the refmapping key of a meta config has no effect when
-  // the tool runs from the command line (ilivalidator 1.15.0). Empty passes no mapping.
+  // the tool runs from the command line (ilivalidator 1.15.0). Empty passes no mapping. Needs ilivalidator
+  // 1.15.0 or newer, like scope.
   string refMapping = 12;
 }
 

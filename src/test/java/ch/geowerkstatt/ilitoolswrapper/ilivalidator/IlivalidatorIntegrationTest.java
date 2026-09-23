@@ -486,6 +486,18 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         assertEquals(Status.Code.INVALID_ARGUMENT, exception.getStatus().getCode(), "An unknown tool version must be rejected as an invalid argument.");
     }
 
+    @Test
+    public void testValidateRejectsReferenceDataOptionsForAnOlderToolVersion() throws Exception {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        call.write(info(info -> info.setToolVersion("1.14.4").setScope("449")));
+        call.halfClose();
+
+        StatusException exception = assertThrows(StatusException.class, () -> readResponse(call, "older_version_scope_log.xtf"));
+        assertEquals(Status.Code.INVALID_ARGUMENT, exception.getStatus().getCode(), "1.14.4 does not know --scope, so the request must be rejected before the tool runs.");
+    }
+
     private static byte[] repositoryArchive() throws IOException {
         return archiveOf(Map.of(
                 "ilidata.xml", resourceAsString("ilivalidator/repository/ilidata.xml"),

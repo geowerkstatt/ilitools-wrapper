@@ -27,6 +27,7 @@ import org.jspecify.annotations.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.lang.module.ModuleDescriptor;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,10 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
     // Keeps only the official model repository of the tool default "%ITF_DIR;http://models.interlis.ch/;%JAR_DIR/ilimodels"
     // as the %ITF_DIR does not contain model files and %JAR_DIR/ilimodels does not exist and upgrades the URL to HTTPS.
     private static final List<String> DEFAULT_MODEL_DIRS = List.of("https://models.interlis.ch/");
+
+    // --scope and --refmapping arrived with ilivalidator 1.15.0. An older version does not reject them: it skips the
+    // unknown option and reads its value and every later argument as data files (measured with 1.14.4).
+    private static final ModuleDescriptor.Version REFERENCE_DATA_MINIMUM_VERSION = ModuleDescriptor.Version.parse("1.15.0");
 
     private static final Logger LOGGER = Logger.getLogger(IlivalidatorService.class.getName());
     private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
@@ -161,6 +166,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 ModelDirValidator.validateRefMapping(info.getRefMapping());
                 requestedPlugins = pluginCatalog.validate(info.getPluginIdsList());
                 requestedToolVersion = validateToolVersion(info.getToolVersion());
+                validateReferenceDataSupport(info, requestedToolVersion);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Rejected request options: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
@@ -423,6 +429,36 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 throw new IllegalArgumentException("Tool version \"" + toolVersion + "\" is not available, expected one of " + availableVersions + ".");
             }
             return toolVersion;
+        }
+
+        /**
+         * Rejects the reference data options when the version that would run predates them: the requested one, or
+         * else the deployment default. Rejected in onInfo like an unknown version, so a misconfiguration surfaces as
+         * such instead of as a failed validation with a misleading log.
+         */
+        private void validateReferenceDataSupport(ValidateRequestInfo requestInfo, String toolVersion) {
+            if (requestInfo.getScope().isEmpty() && requestInfo.getRefMapping().isEmpty()) {
+                return;
+            }
+
+            String version = toolVersion.isEmpty() ? ilitoolsRunner.defaultVersion(IlitoolsRunner.Tool.ILIVALIDATOR) : toolVersion;
+            if (versionNumber(version).compareTo(REFERENCE_DATA_MINIMUM_VERSION) < 0) {
+                throw new IllegalArgumentException("The reference data options scope and refMapping require ilivalidator "
+                        + REFERENCE_DATA_MINIMUM_VERSION + " or newer, but version " + version + " would run.");
+            }
+        }
+
+        /**
+         * The version number of an offered version without any suffix, so a build such as 1.15.1-SNAPSHOT compares as
+         * 1.15.1.
+         */
+        private static ModuleDescriptor.Version versionNumber(String version) {
+            try {
+                return ModuleDescriptor.Version.parse(version.split("[-+]", 2)[0]);
+            } catch (IllegalArgumentException e) {
+                // The offered versions are directory names of the deployment, so an unparsable one is its fault.
+                throw new IllegalStateException("Tool version \"" + version + "\" is not a comparable version number.", e);
+            }
         }
 
         private static void addFlag(List<String> args, String flag, boolean enabled) {
