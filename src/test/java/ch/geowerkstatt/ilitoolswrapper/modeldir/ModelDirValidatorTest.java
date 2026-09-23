@@ -165,6 +165,19 @@ public final class ModelDirValidatorTest {
         assertMetaConfigRejected("ILIDATA:DEFAULT");
     }
 
+    @Test
+    void refMappingAcceptsOnlyIlidataReferences() {
+        assertDoesNotThrow(() -> ModelDirValidator.validateRefMapping("ilidata:DMAV_RefData_Mapping"));
+        assertDoesNotThrow(() -> ModelDirValidator.validateRefMapping(""));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> ModelDirValidator.validateRefMapping("/app/processing/other-session/file1.xtf"),
+                "A file path should have been rejected.");
+        String message = Objects.requireNonNull(exception.getMessage(), "Rejection must carry a message.");
+        assertTrue(message.startsWith("Ref mapping"), "Message should name the rejected option, but was: " + message);
+    }
+
     private static ModelDirValidator ilivalidator() {
         return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, PrivateNetworkPolicy.ALLOW, ILIVALIDATOR_MODEL_DIRS);
     }

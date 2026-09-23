@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Reference data mapping of the test repository: names reference data for scope 449 only. -->
+<ili:transfer xmlns:ili="http://www.interlis.ch/xtf/2.4/INTERLIS"
+  xmlns="http://www.interlis.ch/xtf/2.4/IliVRefData_V1_0">
+  <ili:headersection>
+    <ili:models>
+      <ili:model>IliVRefData_V1_0</ili:model>
+    </ili:models>
+    <ili:sender>ilitools-wrapper</ili:sender>
+  </ili:headersection>
+  <ili:datasection>
+    <Mapping ili:bid="3c5e7a91-2b4d-4f6a-8c1e-9d0b2f4a6c8e">
+      <RefData ili:tid="o449">
+        <scope>449</scope>
+        <refdata>ilidata:TEST-REFDATA-449</refdata>
+      </RefData>
+    </Mapping>
+  </ili:datasection>
+</ili:transfer>

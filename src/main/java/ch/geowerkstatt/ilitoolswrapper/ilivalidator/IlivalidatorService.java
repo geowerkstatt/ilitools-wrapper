@@ -158,6 +158,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             try {
                 modelDirArgument = modelDirValidator.validateAndJoin(info.getModelDirsList());
                 ModelDirValidator.validateMetaConfig(info.getMetaConfig());
+                ModelDirValidator.validateRefMapping(info.getRefMapping());
                 requestedPlugins = pluginCatalog.validate(info.getPluginIdsList());
                 requestedToolVersion = validateToolVersion(info.getToolVersion());
             } catch (IllegalArgumentException e) {
@@ -372,6 +373,8 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
 
             addArgument(args, "--modeldir", modelDirArgument);
             addArgument(args, "--metaConfig", requestInfo.getMetaConfig());
+            addArgument(args, "--refmapping", requestInfo.getRefMapping());
+            addArgument(args, "--scope", requestInfo.getScope());
             addArgument(args, "--plugins", materializePlugins(transferFile).map(Path::toString).orElse(""));
 
             args.add(transferFile.filePath().toAbsolutePath().toString());

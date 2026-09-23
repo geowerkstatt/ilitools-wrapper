@@ -241,6 +241,22 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     }
 
     @Test
+    public void testValidateLoadsTheReferenceDataOfTheScope() throws Exception {
+        try (LocalRepositoryServer repository = LocalRepositoryServer.startWithReferenceData()) {
+            ValidationResult matchingScope = validateWithReferenceData(repository, "449", "refdata_matching_scope_log.xtf");
+            assertTrue(matchingScope.success, "The mapping names reference data for scope 449, so the reference should resolve. Log:\n" + matchingScope.log);
+
+            ValidationResult otherScope = validateWithReferenceData(repository, "450", "refdata_other_scope_log.xtf");
+            assertFalse(otherScope.success, "The mapping names no reference data for scope 450, so the reference cannot resolve. Log:\n" + otherScope.log);
+            assertTrue(otherScope.log.contains("No object found with OID m449"), "Text log should report the unresolved reference. Log:\n" + otherScope.log);
+
+            List<String> requestedPaths = repository.requestedPaths();
+            assertTrue(requestedPaths.contains("/refmapping.xtf"), "The tool should have read the mapping the request names. Requested: " + requestedPaths);
+            assertTrue(requestedPaths.contains("/refdata_449.xtf"), "The tool should have read the reference data of the scope. Requested: " + requestedPaths);
+        }
+    }
+
+    @Test
     public void testParallelValidationsCanShareCache() throws Exception {
         try (LocalRepositoryServer repository = LocalRepositoryServer.startWithModels()) {
             var cacheDir = System.getenv("ILI_CACHE");
@@ -556,6 +572,31 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
             String transferResourcePath) throws StatusException, InterruptedException, IOException {
         writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, transferResourcePath);
         writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model.ili");
+    }
+
+    /**
+     * Validates the delivery that references municipality m449 with the mapping that names that municipality as
+     * the reference data of scope 449 only. All objects must be accessible, otherwise the tool does not check
+     * whether the reference resolves.
+     */
+    private ValidationResult validateWithReferenceData(
+            LocalRepositoryServer repository,
+            String scope,
+            String xtfLogFileName) throws StatusException, InterruptedException, IOException {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        call.write(info(info -> info
+                .addModelDirs("%ITF_DIR/models")
+                .addModelDirs(repository.baseUrl())
+                .setRefMapping("ilidata:TEST-REFMAPPING")
+                .setAllObjectsAccessible(true)
+                .setScope(scope)));
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_refdata.xtf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_refdata.ili");
+        call.halfClose();
+
+        return readResponse(call, xtfLogFileName);
     }
 
     private static void assertXtfLog(Path xtfLogPath) throws IOException {

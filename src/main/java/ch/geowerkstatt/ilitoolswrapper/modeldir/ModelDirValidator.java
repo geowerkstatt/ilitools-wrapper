@@ -63,16 +63,32 @@ public final class ModelDirValidator {
      * @throws IllegalArgumentException if the reference is not of the form {@code ilidata:<DatasetId>}
      */
     public static void validateMetaConfig(String metaConfig) {
-        if (metaConfig.isEmpty()) {
+        validateIlidataReference(metaConfig, "Meta config");
+    }
+
+    /**
+     * Validates the reference data mapping of a request in the same form as {@link #validateMetaConfig}. The mapping
+     * decides which reference data the tool loads, and a file path would point the tool at server side files such as
+     * the transfer file of another session.
+     *
+     * @param refMapping the reference to validate, empty if no reference data mapping was requested
+     * @throws IllegalArgumentException if the reference is not of the form {@code ilidata:<DatasetId>}
+     */
+    public static void validateRefMapping(String refMapping) {
+        validateIlidataReference(refMapping, "Ref mapping");
+    }
+
+    private static void validateIlidataReference(String reference, String optionName) {
+        if (reference.isEmpty()) {
             return;
         }
 
-        String datasetId = metaConfig.startsWith(ILIDATA_PREFIX) ? metaConfig.substring(ILIDATA_PREFIX.length()) : "";
+        String datasetId = reference.startsWith(ILIDATA_PREFIX) ? reference.substring(ILIDATA_PREFIX.length()) : "";
         boolean valid = !datasetId.isEmpty()
                 && !datasetId.contains(ENTRY_SEPARATOR)
                 && datasetId.chars().noneMatch(Character::isWhitespace);
         if (!valid) {
-            throw new IllegalArgumentException("Meta config must have the form \"ilidata:<DatasetId>\" but was \"" + metaConfig + "\".");
+            throw new IllegalArgumentException(optionName + " must have the form \"ilidata:<DatasetId>\" but was \"" + reference + "\".");
         }
     }
 

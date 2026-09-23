@@ -204,11 +204,26 @@ Die folgenden Optionen können in der `info`-Nachricht gesetzt und werden als Ko
 | `multiplicityOff` | `--multiplicityOff` |
 | `skipPolygonBuilding` | `--skipPolygonBuilding` |
 
-Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile), sowie `pluginIds`, siehe [Plugins zuschalten](#plugins-zuschalten).
+Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile), `refMapping` und `scope`, siehe [Referenzdaten](#referenzdaten), sowie `pluginIds`, siehe [Plugins zuschalten](#plugins-zuschalten).
 
 | Feld | Beschreibung |
 | --- | --- |
 | `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. |
+
+### Referenzdaten
+
+Referenzdaten lädt ilivalidator zusätzlich zur Transferdatei, prüft sie aber selbst nicht, etwa die Gemeinde, auf die eine Lieferung verweist. Welche es lädt, bestimmt eine Abbildungstabelle im Modell `IliVRefData_V1_0` (im Werkzeug enthalten): Jeder Eintrag nennt einen Validierungsumfang und/oder ein Topic sowie die URIs der Referenzdaten.
+
+| Feld | ilivalidator-Argument | Beschreibung |
+| --- | --- | --- |
+| `refMapping` | `--refmapping` | Abbildungstabelle in der Form `ilidata:<DatasetId>`, vom Tool über die `modelDirs` aufgelöst. Ein Dateipfad wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. |
+| `scope` | `--scope` | Validierungsumfang dieses Requests, z.B. die BFS-Nummer der Gemeinde. Wählt die Einträge der Abbildungstabelle und steht Constraints als Laufzeitparameter `IliVRuntime_V1_0.Scope` zur Verfügung. |
+
+Beide Felder gibt es erst ab ilivalidator 1.15.0; mit einer älteren `toolVersion` scheitert der Lauf an der unbekannten Option im Werkzeug. Referenzen in die Referenzdaten prüft das Werkzeug nur mit `allObjectsAccessible`.
+
+Die Meta-Konfiguration kennt zwar einen Schlüssel `refmapping`, er wirkt aber nicht, wenn das Werkzeug über die Kommandozeile läuft (gemessen mit 1.15.0): Die Kommandozeile belegt die Einstellung immer, auch ohne `--refmapping` mit einem leeren Wert, und die Meta-Konfiguration füllt nur unbelegte Einstellungen. Darum ist `refMapping` ein eigenes Feld.
+
+Wie beim [mitgesendeten Repository](#repository-im-request-mitsenden) entscheidet der Inhalt mit, was ein Prüfresultat bedeutet: Abbildungstabelle und Referenzdaten kommen unverändert aus den Repositories, und die URIs in der Tabelle prüft der Wrapper nicht (sie dürfen auch lokale Pfade nennen). Eine Abbildungstabelle gehört deshalb in ein geprüftes Repository.
 
 ### Ablauf der Antwort
 
