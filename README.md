@@ -221,7 +221,7 @@ Referenzdaten lädt ilivalidator zusätzlich zur Transferdatei, prüft sie aber 
 
 Beide Felder gibt es erst ab ilivalidator 1.15.0. Läuft eine ältere Version, über `toolVersion` gewählt oder als Voreinstellung des Deployments, lehnt der Wrapper den Request mit `INVALID_ARGUMENT` ab, bevor eine Datei entgegengenommen wird. Das Werkzeug selbst würde die Option nicht ablehnen, sondern überspringen und ihren Wert samt allen folgenden Argumenten als Datendateien lesen (gemessen mit 1.14.4). Referenzen in die Referenzdaten prüft das Werkzeug nur mit `allObjectsAccessible`.
 
-Die Meta-Konfiguration kennt zwar einen Schlüssel `refmapping`, er wirkt aber nicht, wenn das Werkzeug über die Kommandozeile läuft (gemessen mit 1.15.0): Die Kommandozeile belegt die Einstellung immer, auch ohne `--refmapping` mit einem leeren Wert, und die Meta-Konfiguration füllt nur unbelegte Einstellungen. Darum ist `refMapping` ein eigenes Feld.
+Die Abbildungstabelle gehört in `refMapping`: Ein Schlüssel `refmapping` in der Meta-Konfiguration wirkt nicht (ilivalidator 1.15.0, gleiche Ursache wie [claeis/ilivalidator#458](https://github.com/claeis/ilivalidator/issues/458)).
 
 Wie beim [mitgesendeten Repository](#repository-im-request-mitsenden) entscheidet der Inhalt mit, was ein Prüfresultat bedeutet: Abbildungstabelle und Referenzdaten kommen unverändert aus den Repositories, und die URIs in der Tabelle prüft der Wrapper nicht (sie dürfen auch lokale Pfade nennen). Eine Abbildungstabelle gehört deshalb in ein geprüftes Repository.
 
