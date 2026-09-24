@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ili:transfer xmlns:ili="http://www.interlis.ch/xtf/2.4/INTERLIS"
+  xmlns="http://www.interlis.ch/xtf/2.4/RefDataModel">
+  <ili:headersection>
+    <ili:models>
+      <ili:model>RefDataModel</ili:model>
+    </ili:models>
+    <ili:sender>ilitools-wrapper</ili:sender>
+  </ili:headersection>
+  <ili:datasection>
+    <Municipalities ili:bid="municipalities449">
+      <Municipality ili:tid="m449">
+        <Name>Sauge</Name>
+      </Municipality>
+    </Municipalities>
+  </ili:datasection>
+</ili:transfer>

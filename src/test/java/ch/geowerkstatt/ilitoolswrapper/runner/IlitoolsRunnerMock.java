@@ -16,6 +16,7 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     private final List<Arguments> allArguments = new ArrayList<>();
     private @Nullable Exception exception;
     private Set<String> availableVersions = Set.of();
+    private @Nullable String defaultVersion;
     private @Nullable Tool versionsQueriedFor;
     private boolean holdNextRun;
     private @Nullable CompletableFuture<Void> pendingRun;
@@ -40,6 +41,15 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
     public Set<String> availableVersions(@NonNull Tool tool) {
         versionsQueriedFor = tool;
         return availableVersions;
+    }
+
+    @Override
+    @NonNull
+    public String defaultVersion(@NonNull Tool tool) {
+        if (defaultVersion == null) {
+            throw new IllegalStateException("The test did not configure a default version, see useDefaultVersion.");
+        }
+        return defaultVersion;
     }
 
     /**
@@ -93,6 +103,15 @@ public final class IlitoolsRunnerMock implements IlitoolsRunner {
      */
     public void offerVersions(String... versions) {
         this.availableVersions = new TreeSet<>(List.of(versions));
+    }
+
+    /**
+     * Configures the version {@link #defaultVersion} reports, for any tool.
+     *
+     * @param version the deployment default to report
+     */
+    public void useDefaultVersion(String version) {
+        this.defaultVersion = version;
     }
 
     /**

@@ -38,6 +38,56 @@
           </DatasetIdx16.DataFile>
         </files>
       </DatasetIdx16.DataIndex.DatasetMetadata>
+      <DatasetIdx16.DataIndex.DatasetMetadata TID="2">
+        <id>TEST-REFMAPPING</id>
+        <version>1.0.0</version>
+        <publishingDate>2026-09-23</publishingDate>
+        <owner>mailto:support@geowerkstatt.ch</owner>
+        <title>
+          <DatasetIdx16.MultilingualText>
+            <LocalisedText>
+              <DatasetIdx16.LocalisedText>
+                <Text>Test reference data mapping</Text>
+              </DatasetIdx16.LocalisedText>
+            </LocalisedText>
+          </DatasetIdx16.MultilingualText>
+        </title>
+        <files>
+          <DatasetIdx16.DataFile>
+            <fileFormat>application/interlis+xml;version=2.4</fileFormat>
+            <file>
+              <DatasetIdx16.File>
+                <path>refmapping.xtf</path>
+              </DatasetIdx16.File>
+            </file>
+          </DatasetIdx16.DataFile>
+        </files>
+      </DatasetIdx16.DataIndex.DatasetMetadata>
+      <DatasetIdx16.DataIndex.DatasetMetadata TID="3">
+        <id>TEST-REFDATA-449</id>
+        <version>1.0.0</version>
+        <publishingDate>2026-09-23</publishingDate>
+        <owner>mailto:support@geowerkstatt.ch</owner>
+        <title>
+          <DatasetIdx16.MultilingualText>
+            <LocalisedText>
+              <DatasetIdx16.LocalisedText>
+                <Text>Test reference data of scope 449</Text>
+              </DatasetIdx16.LocalisedText>
+            </LocalisedText>
+          </DatasetIdx16.MultilingualText>
+        </title>
+        <files>
+          <DatasetIdx16.DataFile>
+            <fileFormat>application/interlis+xml;version=2.4</fileFormat>
+            <file>
+              <DatasetIdx16.File>
+                <path>refdata_449.xtf</path>
+              </DatasetIdx16.File>
+            </file>
+          </DatasetIdx16.DataFile>
+        </files>
+      </DatasetIdx16.DataIndex.DatasetMetadata>
     </DatasetIdx16.DataIndex>
   </DATASECTION>
 </TRANSFER>

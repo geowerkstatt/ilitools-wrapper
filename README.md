@@ -114,7 +114,7 @@ Der Wrapper bringt pro Werkzeug eine oder mehrere Versionen mit, je Version ein 
 
 Die Voreinstellung ist bewusst von der neusten Version entkoppelt: so lässt sich eine neue Version anbieten, ohne dass sie automatisch greift, etwa weil sie experimentell ist. Welche Version tatsächlich lief, steht im Log-Kopf des Werkzeugs (`ilivalidator-1.15.0-...`); eine Lieferung trägt den Nachweis also mit.
 
-Die angebotene Menge bestimmt das Deployment: die Build-Argumente `ILI2GPKG_ADDITIONAL_VERSIONS` / `ILIVALIDATOR_ADDITIONAL_VERSIONS` (Leerzeichen- oder Komma-getrennt) des Docker-Images ergänzen die Voreinstellung; für die lokale Entwicklung entsprechen ihnen `ili2gpkgAdditionalVersions` / `ilivalidatorAdditionalVersions` (Komma- oder Leerzeichen-getrennt) in `gradle.properties`. Die Menge klein halten, etwa aktuell plus Vorgänger: die Request-Felder bilden auf die Optionen einer Version ab, und eine zu alte Version scheitert an einer unbekannten Option im Werkzeug statt an unserer Prüfung.
+Die angebotene Menge bestimmt das Deployment: die Build-Argumente `ILI2GPKG_ADDITIONAL_VERSIONS` / `ILIVALIDATOR_ADDITIONAL_VERSIONS` (Leerzeichen- oder Komma-getrennt) des Docker-Images ergänzen die Voreinstellung; für die lokale Entwicklung entsprechen ihnen `ili2gpkgAdditionalVersions` / `ilivalidatorAdditionalVersions` (Komma- oder Leerzeichen-getrennt) in `gradle.properties`. Die Menge klein halten, etwa aktuell plus Vorgänger: die Request-Felder bilden auf die Optionen einer Version ab, und eine zu alte Version lehnt eine unbekannte Option nicht ab. Sie überspringt sie und liest deren Wert samt allen folgenden Argumenten als Datendateien (gemessen mit ilivalidator 1.14.4). Für Felder, die eine neuere Version voraussetzen, prüft der Wrapper die Version deshalb selbst (siehe [Referenzdaten](#referenzdaten)).
 
 ## Ili2gpkg service
 
@@ -204,11 +204,26 @@ Die folgenden Optionen können in der `info`-Nachricht gesetzt und werden als Ko
 | `multiplicityOff` | `--multiplicityOff` |
 | `skipPolygonBuilding` | `--skipPolygonBuilding` |
 
-Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile), sowie `pluginIds`, siehe [Plugins zuschalten](#plugins-zuschalten).
+Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile), `refMapping` und `scope`, siehe [Referenzdaten](#referenzdaten), sowie `pluginIds`, siehe [Plugins zuschalten](#plugins-zuschalten).
 
 | Feld | Beschreibung |
 | --- | --- |
 | `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. |
+
+### Referenzdaten
+
+Referenzdaten lädt ilivalidator zusätzlich zur Transferdatei, prüft sie aber selbst nicht, etwa die Gemeinde, auf die eine Lieferung verweist. Welche es lädt, bestimmt eine Abbildungstabelle im Modell `IliVRefData_V1_0` (im Werkzeug enthalten): Jeder Eintrag nennt einen Validierungsumfang und/oder ein Topic sowie die URIs der Referenzdaten.
+
+| Feld | ilivalidator-Argument | Beschreibung |
+| --- | --- | --- |
+| `refMapping` | `--refmapping` | Abbildungstabelle in der Form `ilidata:<DatasetId>`, vom Tool über die `modelDirs` aufgelöst. Ein Dateipfad wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. |
+| `scope` | `--scope` | Validierungsumfang dieses Requests, z.B. die BFS-Nummer der Gemeinde. Wählt die Einträge der Abbildungstabelle und steht Constraints als Laufzeitparameter `IliVRuntime_V1_0.Scope` zur Verfügung. |
+
+Beide Felder gibt es erst ab ilivalidator 1.15.0. Läuft eine ältere Version, über `toolVersion` gewählt oder als Voreinstellung des Deployments, lehnt der Wrapper den Request mit `INVALID_ARGUMENT` ab, bevor eine Datei entgegengenommen wird. Das Werkzeug selbst würde die Option nicht ablehnen, sondern überspringen und ihren Wert samt allen folgenden Argumenten als Datendateien lesen (gemessen mit 1.14.4). Referenzen in die Referenzdaten prüft das Werkzeug nur mit `allObjectsAccessible`.
+
+Die Abbildungstabelle gehört in `refMapping`: Ein Schlüssel `refmapping` in der Meta-Konfiguration wirkt nicht (ilivalidator 1.15.0, gleiche Ursache wie [claeis/ilivalidator#458](https://github.com/claeis/ilivalidator/issues/458)).
+
+Wie beim [mitgesendeten Repository](#repository-im-request-mitsenden) entscheidet der Inhalt mit, was ein Prüfresultat bedeutet: Abbildungstabelle und Referenzdaten kommen unverändert aus den Repositories, und die URIs in der Tabelle prüft der Wrapper nicht (sie dürfen auch lokale Pfade nennen). Eine Abbildungstabelle gehört deshalb in ein geprüftes Repository.
 
 ### Ablauf der Antwort
 

@@ -92,6 +92,11 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         return scanned;
     }
 
+    @Override
+    public String defaultVersion(Tool tool) {
+        return resolveVersion(tool, "");
+    }
+
     // Matching the scanned set is what turns the version into a path: a request value never builds a path
     // before it matched a real directory name (the services check the same set in onInfo, this is the
     // backstop for callers that do not). Resolving and validating here, before the cache, is also what keeps

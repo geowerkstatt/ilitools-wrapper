@@ -38,6 +38,10 @@ final class LocalRepositoryServer implements AutoCloseable {
         return start(Set.of("ilidata.xml", "test_profile.toml", "ilimodels.xml", "model.ili"));
     }
 
+    static LocalRepositoryServer startWithReferenceData() throws IOException {
+        return start(Set.of("ilidata.xml", "refmapping.xtf", "refdata_449.xtf"));
+    }
+
     private static LocalRepositoryServer start(Set<String> servedFiles) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         LocalRepositoryServer repository = new LocalRepositoryServer(server, servedFiles);
