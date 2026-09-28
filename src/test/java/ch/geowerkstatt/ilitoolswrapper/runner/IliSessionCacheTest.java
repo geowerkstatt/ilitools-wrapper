@@ -5,6 +5,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -62,7 +64,11 @@ public class IliSessionCacheTest {
 
     @Test
     public void testWriteToSharedCacheOverwritesExisting() throws Exception {
-        Files.writeString(sharedTempDir.resolve("updated.txt"), "old file content");
+        Path sharedFile = sharedTempDir.resolve("updated.txt");
+        Files.writeString(sharedFile, "old file content");
+        // A cached entry is older than the download that replaces it. Stated explicitly, because on Linux two writes in a row
+        // can share a timestamp, and moveIfNewer only replaces a strictly older entry.
+        Files.setLastModifiedTime(sharedFile, FileTime.from(Instant.now().minusSeconds(3600)));
 
         Path sessionCacheDir;
         try (IliSessionCache sessionCache = new IliSessionCache(sharedTempDir, sessionTempParent)) {
@@ -71,7 +77,7 @@ public class IliSessionCacheTest {
             sessionCache.writeToSharedCache();
         }
 
-        assertEquals("new file content", Files.readString(sharedTempDir.resolve("updated.txt")));
+        assertEquals("new file content", Files.readString(sharedFile));
     }
 
     @Test
