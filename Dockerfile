@@ -33,6 +33,10 @@ RUN set -eu; \
       rm /tmp/ilivalidator.zip; \
     done
 
+# Previews that downloads.interlis.ch does not offer are vendored in the repository, one folder per version laid out
+# like the distribution but without plugins/, which the tool would load on every run (VendoredToolsTest guards both).
+COPY vendor/ilivalidator/ /opt/ilivalidator/
+
 RUN mkdir -p /opt/grpcurl \
     && curl -fsSL -o /tmp/grpcurl.tar.gz "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" \
     && tar -xzf /tmp/grpcurl.tar.gz -C /opt/grpcurl
