@@ -25,6 +25,9 @@ java {
 
 application {
     mainClass = "ch.geowerkstatt.ilitoolswrapper.Main"
+    // Return memory to the OS between requests: otherwise G1 never shrinks the heap of an idle server and glibc
+    // keeps freed native memory. TrimNativeHeapInterval needs glibc; elsewhere the JVM warns and ignores it.
+    applicationDefaultJvmArgs = listOf("-XX:G1PeriodicGCInterval=60000", "-XX:TrimNativeHeapInterval=60000")
 }
 
 checkstyle {
