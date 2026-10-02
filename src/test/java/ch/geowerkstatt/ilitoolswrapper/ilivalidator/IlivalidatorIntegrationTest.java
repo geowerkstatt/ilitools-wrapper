@@ -257,6 +257,22 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     }
 
     @Test
+    public void testValidateLoadsTheReferenceDataOfAMappingInTheRequest() throws Exception {
+        try (LocalRepositoryServer repository = LocalRepositoryServer.startWithReferenceData()) {
+            ValidationResult matchingScope = validateWithMappingInTheRequest(repository, "449", "refmapping_file_matching_scope_log.xtf");
+            assertTrue(matchingScope.success, "The mapping names reference data for scope 449, so the reference should resolve. Log:\n" + matchingScope.log);
+
+            ValidationResult otherScope = validateWithMappingInTheRequest(repository, "450", "refmapping_file_other_scope_log.xtf");
+            assertFalse(otherScope.success, "The mapping names no reference data for scope 450, so the reference cannot resolve. Log:\n" + otherScope.log);
+            assertTrue(otherScope.log.contains("No object found with OID m449"), "Text log should report the unresolved reference. Log:\n" + otherScope.log);
+
+            List<String> requestedPaths = repository.requestedPaths();
+            assertFalse(requestedPaths.contains("/refmapping.xtf"), "The mapping travels in the request, so the tool must not fetch one from the repository. Requested: " + requestedPaths);
+            assertTrue(requestedPaths.contains("/refdata_449.xtf"), "The reference data named in the mapping still resolve through the repository. Requested: " + requestedPaths);
+        }
+    }
+
+    @Test
     public void testParallelValidationsCanShareCache() throws Exception {
         try (LocalRepositoryServer repository = LocalRepositoryServer.startWithModels()) {
             var cacheDir = System.getenv("ILI_CACHE");
@@ -606,6 +622,30 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
                 .setScope(scope)));
         writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_refdata.xtf");
         writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_refdata.ili");
+        call.halfClose();
+
+        return readResponse(call, xtfLogFileName);
+    }
+
+    /**
+     * Validates the same delivery as {@link #validateWithReferenceData}, with the same mapping sent as a file in the
+     * request instead of being resolved from the repository, which still serves the reference data the mapping names.
+     */
+    private ValidationResult validateWithMappingInTheRequest(
+            LocalRepositoryServer repository,
+            String scope,
+            String xtfLogFileName) throws StatusException, InterruptedException, IOException {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        call.write(info(info -> info
+                .addModelDirs("%ITF_DIR/models")
+                .addModelDirs(repository.baseUrl())
+                .setAllObjectsAccessible(true)
+                .setScope(scope)));
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_refdata.xtf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_refdata.ili");
+        writeResourceFile(call, IlivalidatorFileType.REF_MAPPING_FILE, "ilivalidator/repository/refmapping.xtf");
         call.halfClose();
 
         return readResponse(call, xtfLogFileName);

@@ -512,6 +512,111 @@ public final class IlivalidatorServiceTest {
     }
 
     @Test
+    void refMappingFileIsReceivedAsXtfFile() {
+        ilitoolsRunner.useDefaultVersion("1.15.0");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REF_MAPPING_FILE));
+        requestObserver.onNext(chunk("mapping"));
+
+        assertNull(responseObserver.error());
+        InMemoryProcessingFile created = fileManager.lastCreatedFile();
+        assertTrue(created.filePath().toString().endsWith(".xtf"), "The mapping should be stored as an xtf file, but was " + created.filePath());
+    }
+
+    @Test
+    void validatePassesTheRefMappingFileAsArgument() {
+        ilitoolsRunner.useDefaultVersion("1.15.0");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setScope("449"))
+                .build());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
+        requestObserver.onNext(chunk("data"));
+        InMemoryProcessingFile transferFile = fileManager.lastCreatedFile();
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REF_MAPPING_FILE));
+        requestObserver.onNext(chunk("mapping"));
+        InMemoryProcessingFile mappingFile = fileManager.lastCreatedFile();
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+
+        List<String> args = arguments.args();
+        assertArgumentWithValue(args, "--refmapping", mappingFile.filePath().toAbsolutePath().toString());
+        assertArgumentWithValue(args, "--scope", "449");
+        assertEquals(transferFile.filePath().toAbsolutePath().toString(), args.getLast(), "The transfer file should stay the last, positional argument.");
+
+        assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
+    }
+
+    @Test
+    void refMappingFileIsRejectedTogetherWithRefMapping() {
+        ilitoolsRunner.useDefaultVersion("1.15.0");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setRefMapping("ilidata:DMAV_RefData_Mapping"))
+                .build());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REF_MAPPING_FILE));
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        String description = Status.fromThrowable(responseObserver.error()).getDescription();
+        assertNotNull(description);
+        assertTrue(description.contains("refMapping") && description.contains("REF_MAPPING_FILE"), "The rejection should name both ways to send the mapping, but was: " + description);
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected mapping.");
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
+    }
+
+    @Test
+    void multipleRefMappingFilesAreRejected() {
+        ilitoolsRunner.useDefaultVersion("1.15.0");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REF_MAPPING_FILE));
+        requestObserver.onNext(chunk("first"));
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REF_MAPPING_FILE));
+        requestObserver.onNext(chunk("second"));
+        requestObserver.onCompleted();
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        String description = Status.fromThrowable(responseObserver.error()).getDescription();
+        assertNotNull(description);
+        assertTrue(description.contains("REF_MAPPING_FILE"), "The rejection should name the file type, but was: " + description);
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run when more than one mapping is sent.");
+    }
+
+    @Test
+    void refMappingFileIsRejectedForAnOlderRequestedVersion() {
+        ilitoolsRunner.offerVersions("1.15.0", "1.14.4");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setToolVersion("1.14.4"))
+                .build());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REF_MAPPING_FILE));
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        String description = Status.fromThrowable(responseObserver.error()).getDescription();
+        assertNotNull(description);
+        assertTrue(description.contains("1.15.0") && description.contains("1.14.4"), "The rejection should name both versions, but was: " + description);
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected mapping.");
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
+    }
+
+    @Test
     void pluginsAreNotPassedWithoutASelection() {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 
