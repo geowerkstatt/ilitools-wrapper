@@ -22,6 +22,9 @@ enum IlivalidatorFileType {
   // The tool switches to its INTERLIS 1 semantics only for a transfer file ending in .itf,
   // so the type of the transfer file carries the format.
   TRANSFER_FILE_ITF = 5;
+  // Reference data mapping in the model IliVRefData_V1_0, passed as --refmapping in place of the refMapping field.
+  // At most one, and only with refMapping empty. Needs ilivalidator 1.15.0 or newer, like scope.
+  REF_MAPPING_FILE = 6;
 }
 
 message IlivalidatorFileStart {
@@ -47,7 +50,8 @@ message ValidateRequestInfo {
   // for an older version, requested or deployment default, the request is rejected with INVALID_ARGUMENT.
   string scope = 11;
   // Reference data mapping in the form ilidata:<DatasetId>, resolved by the tool through the modelDirs and
-  // passed as --refmapping. Empty passes no mapping. Needs ilivalidator 1.15.0 or newer, like scope.
+  // passed as --refmapping. Empty passes no mapping, unless the request sends a REF_MAPPING_FILE. Needs
+  // ilivalidator 1.15.0 or newer, like scope.
   string refMapping = 12;
 }
 

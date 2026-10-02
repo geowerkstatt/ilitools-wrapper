@@ -204,11 +204,15 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 case TRANSFER_FILE_ITF -> "itf";
                 case REPOSITORY_ARCHIVE -> "zip";
                 case MODEL_FILE -> "ili";
+                case REF_MAPPING_FILE -> "xtf";
                 default -> null;
             };
             if (extension == null) {
                 LOGGER.warning("Received invalid file type.");
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription("File has an invalid type."));
+                return;
+            }
+            if (type == IlivalidatorFileType.REF_MAPPING_FILE && !acceptRefMappingFile()) {
                 return;
             }
 
@@ -306,8 +310,9 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                     return null;
                 });
             } catch (IllegalArgumentException e) {
-                // Reaches here from the plugin materialization, and from the runner's version backstop in case
-                // the offered set ever diverged between the onInfo validation and the start of the tool.
+                // Reaches here from a second mapping file, from the plugin materialization, and from the runner's
+                // version backstop in case the offered set ever diverged between the onInfo validation and the start
+                // of the tool.
                 LOGGER.warning("Rejected during argument mapping: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
             } catch (Exception e) {
@@ -380,12 +385,24 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
 
             addArgument(args, "--modeldir", modelDirArgument);
             addArgument(args, "--metaConfig", requestInfo.getMetaConfig());
-            addArgument(args, "--refmapping", requestInfo.getRefMapping());
+            addArgument(args, "--refmapping", refMappingArgument(requestInfo));
             addArgument(args, "--scope", requestInfo.getScope());
             addArgument(args, "--plugins", materializePlugins(transferFile).map(Path::toString).orElse(""));
 
             args.add(transferFile.filePath().toAbsolutePath().toString());
             return args;
+        }
+
+        /**
+         * The mapping is either the {@code ilidata:} reference of the info or the path of the received mapping file;
+         * a request with both was rejected at the start of the file.
+         */
+        private String refMappingArgument(ValidateRequestInfo requestInfo) {
+            List<ProcessingFile> mappingFiles = files.getAll(IlivalidatorFileType.REF_MAPPING_FILE);
+            if (mappingFiles.size() > 1) {
+                throw new IllegalArgumentException("At most one REF_MAPPING_FILE can be sent.");
+            }
+            return mappingFiles.isEmpty() ? requestInfo.getRefMapping() : mappingFiles.getFirst().filePath().toAbsolutePath().toString();
         }
 
         /**
@@ -442,10 +459,35 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 return;
             }
 
+            requireReferenceDataSupport(toolVersion, "The reference data options scope and refMapping require");
+        }
+
+        /**
+         * Rejects a mapping file at its start unless the request can use it, so that the content of an unusable mapping
+         * is never received. The tool takes one mapping option, so the info reference and the file exclude each other.
+         */
+        private boolean acceptRefMappingFile() {
+            try {
+                if (!Objects.requireNonNull(info).getRefMapping().isEmpty()) {
+                    throw new IllegalArgumentException("The reference data mapping is sent either as refMapping or as a REF_MAPPING_FILE, not both.");
+                }
+                requireReferenceDataSupport(requestedToolVersion, "A REF_MAPPING_FILE requires");
+                return true;
+            } catch (IllegalArgumentException e) {
+                LOGGER.warning("Rejected reference data mapping file: " + e.getMessage());
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
+                return false;
+            } catch (IllegalStateException e) {
+                LOGGER.log(Level.SEVERE, "Cannot serve the request.", e);
+                cancelWithError(Status.ABORTED.withDescription(e.getMessage()));
+                return false;
+            }
+        }
+
+        private void requireReferenceDataSupport(String toolVersion, String requirement) {
             String version = toolVersion.isEmpty() ? ilitoolsRunner.defaultVersion(IlitoolsRunner.Tool.ILIVALIDATOR) : toolVersion;
             if (versionNumber(version).compareTo(REFERENCE_DATA_MINIMUM_VERSION) < 0) {
-                throw new IllegalArgumentException("The reference data options scope and refMapping require ilivalidator "
-                        + REFERENCE_DATA_MINIMUM_VERSION + " or newer, but version " + version + " would run.");
+                throw new IllegalArgumentException(requirement + " ilivalidator " + REFERENCE_DATA_MINIMUM_VERSION + " or newer, but version " + version + " would run.");
             }
         }
 
