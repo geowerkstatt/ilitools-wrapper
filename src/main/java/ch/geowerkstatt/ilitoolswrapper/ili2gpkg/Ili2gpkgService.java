@@ -82,7 +82,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             @Nullable Timeout toolTimeout) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
-        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
+        // Offered repositories serve validations so far, so ili2gpkg takes no %REPOSITORIES entries.
+        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, null, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
         this.pluginCatalog = pluginCatalog;
         this.toolTimeout = toolTimeout;
     }

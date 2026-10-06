@@ -4,6 +4,7 @@ import ch.geowerkstatt.ilitoolswrapper.RecordingStreamObserver;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryFileManager;
 import ch.geowerkstatt.ilitoolswrapper.files.InMemoryProcessingFile;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryCatalog;
 import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileType;
@@ -20,7 +21,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -32,6 +35,9 @@ public final class IlivalidatorServiceTest {
     @TempDir
     private Path pluginRoot;
 
+    @TempDir
+    private Path repositoryRoot;
+
     private InMemoryFileManager fileManager;
     private IlitoolsRunnerMock ilitoolsRunner;
     private IlivalidatorService service;
@@ -42,7 +48,13 @@ public final class IlivalidatorServiceTest {
         fileManager = new InMemoryFileManager();
         ilitoolsRunner = new IlitoolsRunnerMock();
         // Private networks are allowed so that the unit tests never depend on name resolution.
-        service = new IlivalidatorService(fileManager, ilitoolsRunner, PrivateNetworkPolicy.ALLOW, new PluginCatalog(pluginRoot), new IlitoolsRunner.Timeout(30, TimeUnit.SECONDS));
+        service = new IlivalidatorService(
+                fileManager,
+                ilitoolsRunner,
+                PrivateNetworkPolicy.ALLOW,
+                new PluginCatalog(pluginRoot),
+                new RepositoryCatalog(repositoryRoot),
+                new IlitoolsRunner.Timeout(30, TimeUnit.SECONDS));
         responseObserver = new RecordingStreamObserver<>();
     }
 
@@ -633,6 +645,46 @@ public final class IlivalidatorServiceTest {
         assertFalse(arguments.args().contains("--plugins"), "Without a selection no plugin directory may be passed.");
 
         assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
+    }
+
+    @Test
+    void validatePassesAnOfferedRepositoryAsItsDirectory() throws IOException {
+        Path repository = Files.createDirectory(repositoryRoot.resolve("dmav@0.1.1"));
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .addModelDirs("https://models.interlis.ch/")
+                        .addModelDirs("%REPOSITORIES/dmav@0.1.1"))
+                .build());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        // The tool does not know the placeholder, so it has to receive the directory itself.
+        assertArgumentWithValue(arguments.args(), "--modeldir", "https://models.interlis.ch/;" + repository.toAbsolutePath());
+    }
+
+    @Test
+    void repositoryThatIsNotOfferedIsRejected() {
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        // The repository directory of this test is empty, so no repository is on offer.
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .addModelDirs("%REPOSITORIES/dmav@0.1.1"))
+                .build());
+
+        Throwable error = responseObserver.error();
+        assertNotNull(error);
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(error));
+        String description = String.valueOf(Status.fromThrowable(error).getDescription());
+        assertTrue(description.contains("offered"), "The rejection should say that the repository is not offered, but was: " + description);
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for a rejected request.");
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
     }
 
     @Test

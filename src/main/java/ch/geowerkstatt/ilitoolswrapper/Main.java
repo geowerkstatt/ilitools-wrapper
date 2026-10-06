@@ -6,6 +6,7 @@ import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheckManager;
 import ch.geowerkstatt.ilitoolswrapper.ili2gpkg.Ili2gpkgService;
 import ch.geowerkstatt.ilitoolswrapper.ilivalidator.IlivalidatorService;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryCatalog;
 import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.runner.IliSessionCache;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsProcessRunner;
@@ -27,9 +28,11 @@ public final class Main {
         final IlitoolsRunner ilitoolsRunner = new IlitoolsProcessRunner();
         final PrivateNetworkPolicy privateNetworkPolicy = PrivateNetworkPolicy.fromEnvironment();
         final PluginCatalog pluginCatalog = PluginCatalog.fromEnvironment();
+        final RepositoryCatalog repositoryCatalog = RepositoryCatalog.fromEnvironment();
         final IlitoolsRunner.Timeout toolTimeout = IlitoolsRunner.Timeout.fromEnvironment();
         final Ili2gpkgService ili2gpkgService = new Ili2gpkgService(fileManager, ilitoolsRunner, privateNetworkPolicy, pluginCatalog, toolTimeout);
-        final IlivalidatorService ilivalidatorService = new IlivalidatorService(fileManager, ilitoolsRunner, privateNetworkPolicy, pluginCatalog, toolTimeout);
+        final IlivalidatorService ilivalidatorService = new IlivalidatorService(
+                fileManager, ilitoolsRunner, privateNetworkPolicy, pluginCatalog, repositoryCatalog, toolTimeout);
 
         final ServiceHealthCheckManager serviceHealthCheckManager = new ServiceHealthCheckManager(
                 ili2gpkgService,

@@ -64,6 +64,7 @@ ENV ILI2GPKG_VERSION=${ILI2GPKG_VERSION} \
     ILIVALIDATOR_VERSION=${ILIVALIDATOR_VERSION} \
     ILIVALIDATOR_HOME=/opt/ilivalidator \
     ILITOOLS_PLUGINS_DIR=/plugins \
+    ILITOOLS_REPOSITORIES_DIR=/repositories \
     ILI_CACHE=${ILI_CACHE_BASE}/shared \
     SESSION_CACHE_DIR=${ILI_CACHE_BASE}/sessions \
     PROCESSING_DIR=/app/processing
@@ -79,12 +80,12 @@ ENV LC_ALL=C.UTF-8
 # Create non-root user
 ENV APP_UID=1234
 RUN groupadd --gid=$APP_UID app && useradd --uid=$APP_UID --gid=$APP_UID --create-home app
-# The plugin directory is created empty and is meant to be mounted into. Nothing is baked into it, so a new
-# plugin needs no new image, and an empty directory means no plugin is on offer. It deliberately does not live
-# under ILIVALIDATOR_HOME: <jarDir>/plugins is the tool default and would load every jar on every run,
-# regardless of what a request selected.
-RUN mkdir -p ${ILI_CACHE} ${SESSION_CACHE_DIR} ${PROCESSING_DIR} ${ILITOOLS_PLUGINS_DIR} \
-    && chown -R $APP_UID:$APP_UID ${ILI_CACHE} ${SESSION_CACHE_DIR} ${PROCESSING_DIR} ${ILITOOLS_PLUGINS_DIR}
+# The plugin and repository directories are created empty and are meant to be mounted into. Nothing is baked
+# into them, so a new plugin or repository needs no new image, and an empty directory means none is on offer.
+# The plugin directory deliberately does not live under ILIVALIDATOR_HOME: <jarDir>/plugins is the tool default
+# and would load every jar on every run, regardless of what a request selected.
+RUN mkdir -p ${ILI_CACHE} ${SESSION_CACHE_DIR} ${PROCESSING_DIR} ${ILITOOLS_PLUGINS_DIR} ${ILITOOLS_REPOSITORIES_DIR} \
+    && chown -R $APP_UID:$APP_UID ${ILI_CACHE} ${SESSION_CACHE_DIR} ${PROCESSING_DIR} ${ILITOOLS_PLUGINS_DIR} ${ILITOOLS_REPOSITORIES_DIR}
 
 USER $APP_UID
 

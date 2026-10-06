@@ -5,6 +5,7 @@ import ch.geowerkstatt.ilitoolswrapper.IntegrationTestSupport;
 import ch.geowerkstatt.ilitoolswrapper.files.DeleteFileVisitor;
 import ch.geowerkstatt.ilitoolswrapper.files.FilesystemFileManager;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryCatalog;
 import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileType;
@@ -49,6 +50,10 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     private static final int PORT = 5679;
     private static final Path OUTPUT_DIR = Path.of("test-out", "ilivalidator");
 
+    // Offers the repository fixture of LocalRepositoryServer as the repository "repository", read from the source
+    // tree like OUTPUT_DIR is written relative to it, so the same files are reachable both ways.
+    private static final Path REPOSITORY_ROOT = Path.of("src", "test", "resources", "ilivalidator");
+
     public IlivalidatorIntegrationTest() {
         super(PORT, OUTPUT_DIR);
     }
@@ -58,7 +63,13 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         // The repository of the meta config test is served from localhost, so non-public addresses must be allowed.
         // The plugin catalog is the one the build packs the minimal test plugin into, see the testPluginJar task.
         String catalog = Objects.requireNonNull(System.getenv("TEST_PLUGIN_CATALOG"), "The test task must set TEST_PLUGIN_CATALOG.");
-        return new IlivalidatorService(new FilesystemFileManager(), new IlitoolsProcessRunner(), PrivateNetworkPolicy.ALLOW, new PluginCatalog(Path.of(catalog)), new IlitoolsRunner.Timeout(30, TimeUnit.SECONDS));
+        return new IlivalidatorService(
+                new FilesystemFileManager(),
+                new IlitoolsProcessRunner(),
+                PrivateNetworkPolicy.ALLOW,
+                new PluginCatalog(Path.of(catalog)),
+                new RepositoryCatalog(REPOSITORY_ROOT),
+                new IlitoolsRunner.Timeout(30, TimeUnit.SECONDS));
     }
 
     @Test
@@ -270,6 +281,38 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
             assertFalse(requestedPaths.contains("/refmapping.xtf"), "The mapping travels in the request, so the tool must not fetch one from the repository. Requested: " + requestedPaths);
             assertTrue(requestedPaths.contains("/refdata_449.xtf"), "The reference data named in the mapping still resolve through the repository. Requested: " + requestedPaths);
         }
+    }
+
+    @Test
+    public void testValidateLoadsTheReferenceDataFromAnOfferedRepository() throws Exception {
+        ValidationResult matchingScope = validateWithOfferedRepository("449", "offered_repository_matching_scope_log.xtf");
+        assertTrue(matchingScope.success, "The mapping in the offered repository names reference data for scope 449, so the reference should resolve. Log:\n" + matchingScope.log);
+
+        // The tool names the file it validated against: the one in the offered directory, not a download or a cache copy.
+        String xtfLog = Files.readString(matchingScope.xtfLogPath, StandardCharsets.UTF_8);
+        String referenceData = REPOSITORY_ROOT.resolve("repository").resolve("refdata_449.xtf").toAbsolutePath().toString();
+        assertTrue(xtfLog.contains("<DataSource>" + referenceData + "</DataSource>"), "The tool should have read the reference data from the offered directory. XTF log:\n" + xtfLog);
+
+        ValidationResult otherScope = validateWithOfferedRepository("450", "offered_repository_other_scope_log.xtf");
+        assertFalse(otherScope.success, "The mapping names no reference data for scope 450, so the reference cannot resolve. Log:\n" + otherScope.log);
+        assertTrue(otherScope.log.contains("No object found with OID m449"), "Text log should report the unresolved reference. Log:\n" + otherScope.log);
+    }
+
+    @Test
+    public void testValidateReadsTheModelFromAnOfferedRepository() throws Exception {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        call.write(info(info -> info.addModelDirs("%REPOSITORIES/repository")));
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer.xtf");
+        call.halfClose();
+
+        ValidationResult result = readResponse(call, "offered_repository_model_log.xtf");
+        assertTrue(result.success, "The model lies in the offered repository, so the transfer should validate. Log:\n" + result.log);
+
+        // The tool names the model file it compiled: the one in the offered directory, not a download or a cache copy.
+        String model = REPOSITORY_ROOT.resolve("repository").resolve("model.ili").toAbsolutePath().toString();
+        assertTrue(result.log.contains("ilifile <" + model + ">"), "The tool should have read the model from the offered directory. Log:\n" + result.log);
     }
 
     @Test
@@ -646,6 +689,29 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
         writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_refdata.xtf");
         writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_refdata.ili");
         writeResourceFile(call, IlivalidatorFileType.REF_MAPPING_FILE, "ilivalidator/repository/refmapping.xtf");
+        call.halfClose();
+
+        return readResponse(call, xtfLogFileName);
+    }
+
+    /**
+     * Validates the same delivery as {@link #validateWithReferenceData}, with the mapping and the reference data read
+     * from the offered repository directory instead of a repository URL. No repository server runs for it.
+     */
+    private ValidationResult validateWithOfferedRepository(
+            String scope,
+            String xtfLogFileName) throws StatusException, InterruptedException, IOException {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        call.write(info(info -> info
+                .addModelDirs("%ITF_DIR/models")
+                .addModelDirs("%REPOSITORIES/repository")
+                .setRefMapping("ilidata:TEST-REFMAPPING")
+                .setAllObjectsAccessible(true)
+                .setScope(scope)));
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_refdata.xtf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_refdata.ili");
         call.halfClose();
 
         return readResponse(call, xtfLogFileName);
