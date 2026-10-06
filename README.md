@@ -25,11 +25,12 @@ Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Dock
 | `ILIVALIDATOR_HOME` | Aus Dockerfile oder Gradle `run` Task | Installationsverzeichnis von ilivalidator, ein Unterordner pro angebotener Version |
 | `ILIVALIDATOR_VERSION` | Aus Dockerfile oder gradle.properties | Voreinstellung der ilivalidator-Version, wenn ein Request keine wählt (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)) |
 | `ILITOOLS_PLUGINS_DIR` | nicht gesetzt | Verzeichnis mit einem Unterordner pro angebotenem Plugin. Ohne Angabe bietet das Deployment keine Plugins an (siehe [Plugins zuschalten](#plugins-zuschalten)) |
+| `ILITOOLS_REPOSITORIES_DIR` | nicht gesetzt | Verzeichnis mit einem Unterordner pro angebotenem Modell-Repository. Ohne Angabe bietet das Deployment keine Repositories an (siehe [Angebotene Repositories](#angebotene-repositories)) |
 | `MODELDIR_ALLOW_PRIVATE_NETWORKS` | `false` | Erlaubt `modelDirs`-URLs, die in nicht öffentliche Adressbereiche auflösen (siehe [Modell-Repositories und Profile](#modell-repositories-und-profile)) |
 
 ## Modell-Repositories und Profile
 
-Beide Services nehmen in der `info`-Nachricht zwei optionale Felder, mit denen die Auflösung der INTERLIS-Modelle und der Validierungs-Profile gesteuert wird. Die Werte werden unverändert an das Tool weitergegeben:
+Beide Services nehmen in der `info`-Nachricht zwei optionale Felder, mit denen die Auflösung der INTERLIS-Modelle und der Validierungs-Profile gesteuert wird. Die Werte werden unverändert an das Tool weitergegeben, nur ein [angebotenes Repository](#angebotene-repositories) ersetzt der Wrapper durch sein Verzeichnis:
 
 | Feld | Tool-Argument | Beschreibung |
 | --- | --- | --- |
@@ -49,12 +50,13 @@ Erlaubte Einträge:
     - `%ITF_DIR` (`IlivalidatorService`): das Verzeichnis der Transferdatei, also das Session-Verzeichnis des Aufrufs. Mitgesendete Dateien liegen in eigenen Unterordnern: Modell-Dateien in `%ITF_DIR/models`, das entpackte Repository-Archiv in `%ITF_DIR/repository` (siehe die beiden folgenden Abschnitte).
     - `%XTF_DIR` (`Ili2gpkgService`): dasselbe Verzeichnis, mit denselben Unterordnern (`%XTF_DIR/models`, `%XTF_DIR/repository`).
     - `%ILI_FROM_DB` (`Ili2gpkgService`): das im GeoPackage selbst abgelegte Modell. Nötig, sobald `modelDirs` gesetzt ist, weil dieser Eintrag sonst mit dem Tool-Default verloren geht.
+- `%REPOSITORIES/<id>` (nur `IlivalidatorService`): ein Repository, das das Deployment anbietet. Diesen Platzhalter kennt das Tool nicht, der Wrapper ersetzt ihn durch das Verzeichnis des Repositorys (siehe [Angebotene Repositories](#angebotene-repositories)).
 
 Ein Verzeichnis-Eintrag wird vom Tool nicht rekursiv gescannt (gemessen an ilivalidator 1.15.0): `%ITF_DIR` sieht die Unterordner nicht, jede Quelle ist nur über ihren eigenen Eintrag sichtbar, und genau das macht ihre Reihenfolge konfigurierbar.
 
-Alles andere wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen oder ein Tool-Prozess gestartet wird: lokale Pfade, andere Schemas wie `file:`, URLs mit Zugangsdaten, Einträge mit dem Trennzeichen `;`, der Platzhalter des jeweils anderen Tools sowie Unterpfade, die das Verzeichnis verlassen könnten (leere Segmente, `.` oder `..`, Backslashes). URLs, die in nicht öffentliche Adressbereiche auflösen (privat, Loopback, Link-Local, CGNAT, IPv6-ULA), werden ebenfalls abgelehnt; für Testumgebungen lässt sich das mit `MODELDIR_ALLOW_PRIVATE_NETWORKS=true` abschalten.
+Alles andere wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen oder ein Tool-Prozess gestartet wird: lokale Pfade, andere Schemas wie `file:`, URLs mit Zugangsdaten, Einträge mit dem Trennzeichen `;`, der Platzhalter des jeweils anderen Tools, ein `%REPOSITORIES/<id>`, das das Deployment nicht anbietet, sowie Unterpfade, die das Verzeichnis verlassen könnten (leere Segmente, `.` oder `..`, Backslashes). URLs, die in nicht öffentliche Adressbereiche auflösen (privat, Loopback, Link-Local, CGNAT, IPv6-ULA), werden ebenfalls abgelehnt; für Testumgebungen lässt sich das mit `MODELDIR_ALLOW_PRIVATE_NETWORKS=true` abschalten.
 
-Ein URL-Eintrag ist damit per Definition ein öffentlich erreichbares Repository. Nicht publizierte Repositories werden stattdessen im Request mitgesendet.
+Ein URL-Eintrag ist damit per Definition ein öffentlich erreichbares Repository. Nicht publizierte Repositories werden stattdessen im Request mitgesendet oder vom Deployment angeboten.
 
 `metaConfig` unterstützt bewusst nur die Form `ilidata:<DatasetId>`: Profile sind über die `ilidata.xml` des Repositorys indexiert, eine Datei-Form wird nicht angeboten.
 
@@ -78,7 +80,7 @@ Pro Aufruf ist höchstens ein Archiv erlaubt. Beim Entpacken gilt:
 
 Abgelehnt wird immer, bevor ein Tool-Prozess startet, und das Session-Verzeichnis wird auch im Fehlerfall gelöscht.
 
-Die Inline-Route ist für kompakte Repositories gedacht; die Limits markieren die Eignungsgrenze. Grosse, insbesondere katalog-lastige Repositories gehören publiziert und per URL referenziert, dort lädt das Tool nur die benötigten Dateien und der `ILI_CACHE` greift.
+Die Inline-Route ist für kompakte Repositories gedacht; die Limits markieren die Eignungsgrenze. Grosse, insbesondere katalog-lastige Repositories gehören publiziert und per URL referenziert, dort lädt das Tool nur die benötigten Dateien und der `ILI_CACHE` greift, oder sie werden vom Deployment [angeboten](#angebotene-repositories) und ohne Download gelesen.
 
 ### Einzelne Modell-Dateien mitsenden
 
@@ -87,6 +89,16 @@ Beide Services nehmen den Dateityp `MODEL_FILE` an: einzelne `.ili`-Dateien, etw
 Weil der Wrapper die Dateien selbst benennt, kann über diesen Weg kein Repository-Index (`ilidata.xml`, `ilisite.xml`, `ilimodels.xml`) eingeschleust werden: Der Inhalt wird als Modell geparst, nie als Index gelesen. Der Kanal eignet sich damit, anders als das Repository-Archiv, auch für Modelle aus nicht geprüfter Quelle, etwa aus einem Upload. Ein geliefertes Modell kann aber weiterhin ein gleichnamiges amtliches verdrängen oder eigene Prüfungen abschwächen; die Position von `%ITF_DIR/models` bzw. `%XTF_DIR/models` in `modelDirs` entscheidet die Präzedenz, ungeprüfter Inhalt gehört ans Ende der Liste.
 
 Da jede Quelle ihren eigenen Unterordner hat, ist auch die Kombination mit einem Repository-Archiv vollständig priorisierbar, zum Beispiel `https://models.interlis.ch/;%ITF_DIR/repository;%ITF_DIR/models`: amtliche Repositories vor dem mitgesendeten Repository vor den Lieferanten-Modellen.
+
+### Angebotene Repositories
+
+Repositories, die viele Aufrufe brauchen und kein Aufruf verantwortet, etwa amtliche Modelle und Referenzdaten, bietet das Deployment aus einem Verzeichnis an (`ILITOOLS_REPOSITORIES_DIR`, siehe [Konfiguration](#konfiguration)). Das Verzeichnis enthält **einen Unterordner pro Repository**, dessen Name die Id ist, und darin das Repository, wie es sonst ein Webserver ausliefern würde. Wie das Plugin-Verzeichnis liest der Wrapper es bei jedem Request, ein neu abgelegtes Repository ist ohne Neustart verfügbar; der Contract kennt nur Ids, nie Pfade.
+
+Ein Request adressiert ein Repository in `modelDirs` als `%REPOSITORIES/<id>`, bisher nur beim `IlivalidatorService`. Der Wrapper gleicht die Id mit den angebotenen Unterordnern ab und ersetzt den Eintrag durch das Verzeichnis des Repositorys. Eine Id, die das Deployment nicht anbietet, lehnt er mit `INVALID_ARGUMENT` ab, bevor eine Datei entgegengenommen wird; die Meldung nennt die angebotenen Ids. Die Konvention `<name>@<version>` (etwa `dmav@0.1.1`) hält wie bei den Plugins fest, gegen welchen Stand eine Konfiguration geschrieben ist.
+
+Das Tool liest ein angebotenes Repository direkt aus dem Verzeichnis, ohne Download und ohne Kopie in einen Cache. Jeder Lauf sieht damit den aktuellen Inhalt. Wer ihn nachführt, etwa Referenzdaten, ersetzt eine Datei atomar (schreiben, dann umbenennen), damit kein Lauf eine halb geschriebene liest.
+
+Ein angebotenes Repository stammt aus dem Deployment und damit aus einer geprüften Quelle. Es steht deshalb vor mitgesendeten Modellen, zum Beispiel `https://models.interlis.ch/;%REPOSITORIES/dmav@0.1.1;%ITF_DIR/models`.
 
 ## Plugins zuschalten
 

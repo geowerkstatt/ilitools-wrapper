@@ -1,5 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper.modeldir;
 
+import org.jspecify.annotations.Nullable;
+
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -8,6 +10,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * Validates the model repository options of a request before they are handed to an INTERLIS tool.
@@ -17,13 +21,15 @@ import java.util.Set;
  * by a relative subpath below the directory the placeholder expands to (for example the subfolders the wrapper
  * materializes received files into). A local path would give the caller access to server side directories such as
  * the session directory of another request, and an entry containing the join character {@code ;} would expand into
- * several entries.
+ * several entries. The one exception is an offered repository, {@code %REPOSITORIES/<id>}: the tool does not know
+ * that placeholder, so the wrapper replaces it with the directory of the repository.
  */
 public final class ModelDirValidator {
     private static final String ENTRY_SEPARATOR = ";";
     private static final String ILIDATA_PREFIX = "ilidata:";
 
     private final Set<String> allowedPlaceholders;
+    private final @Nullable RepositoryCatalog repositoryCatalog;
     private final PrivateNetworkPolicy privateNetworkPolicy;
     private final List<String> defaultModelDirs;
 
@@ -31,11 +37,18 @@ public final class ModelDirValidator {
      * Creates a validator for a single tool.
      *
      * @param allowedPlaceholders the tool placeholders accepted as entries, for example {@code %ITF_DIR}
+     * @param repositoryCatalog the repositories this deployment offers to the tool, or {@code null} when the tool
+     *     takes no {@code %REPOSITORIES} entries at all
      * @param privateNetworkPolicy whether URLs that resolve into non-public address ranges are accepted
      * @param defaultModelDirs the default modeldir values to use if no value is specified
      */
-    public ModelDirValidator(Set<String> allowedPlaceholders, PrivateNetworkPolicy privateNetworkPolicy, List<String> defaultModelDirs) {
+    public ModelDirValidator(
+            Set<String> allowedPlaceholders,
+            @Nullable RepositoryCatalog repositoryCatalog,
+            PrivateNetworkPolicy privateNetworkPolicy,
+            List<String> defaultModelDirs) {
         this.allowedPlaceholders = Set.copyOf(allowedPlaceholders);
+        this.repositoryCatalog = repositoryCatalog;
         this.privateNetworkPolicy = privateNetworkPolicy;
         this.defaultModelDirs = defaultModelDirs;
     }
@@ -44,15 +57,16 @@ public final class ModelDirValidator {
      * Validates every entry and joins them into the value of the tool option {@code --modeldir}.
      *
      * @param modelDirs the requested model repositories, in the order the tool should search them
-     * @return the joined value, or the default modeldir if no repository was requested
-     * @throws IllegalArgumentException if an entry is neither an allowed placeholder nor an acceptable {@code http(s)} URL
+     * @return the joined value with offered repositories replaced by their directories, or the default modeldir if no
+     *     repository was requested
+     * @throws IllegalArgumentException if an entry is neither an allowed placeholder, nor an offered repository, nor
+     *     an acceptable {@code http(s)} URL
      */
     public String validateAndJoin(List<String> modelDirs) {
         List<String> modelDirsOrDefault = modelDirs.isEmpty() ? defaultModelDirs : modelDirs;
-        for (String modelDir : modelDirsOrDefault) {
-            validateEntry(modelDir);
-        }
-        return String.join(ENTRY_SEPARATOR, modelDirsOrDefault);
+        return modelDirsOrDefault.stream()
+                .map(this::validateEntry)
+                .collect(Collectors.joining(ENTRY_SEPARATOR));
     }
 
     /**
@@ -92,7 +106,7 @@ public final class ModelDirValidator {
         }
     }
 
-    private void validateEntry(String modelDir) {
+    private String validateEntry(String modelDir) {
         if (modelDir.isBlank()) {
             throw new IllegalArgumentException("Model dir entry must not be blank but was \"" + modelDir + "\".");
         }
@@ -100,22 +114,39 @@ public final class ModelDirValidator {
             throw new IllegalArgumentException("Model dir entry \"" + modelDir + "\" must not contain \";\", send one entry per repository.");
         }
 
+        if (repositoryCatalog != null && isRepositoryEntry(modelDir)) {
+            return repositoryCatalog.resolve(modelDir);
+        }
         if (modelDir.startsWith("%")) {
             validatePlaceholder(modelDir);
         } else {
             validateUrl(modelDir);
         }
+        return modelDir;
+    }
+
+    private static boolean isRepositoryEntry(String modelDir) {
+        return modelDir.equals(RepositoryCatalog.PLACEHOLDER) || modelDir.startsWith(RepositoryCatalog.PLACEHOLDER + "/");
     }
 
     private void validatePlaceholder(String modelDir) {
         int subpathIndex = modelDir.indexOf('/');
         String placeholder = subpathIndex < 0 ? modelDir : modelDir.substring(0, subpathIndex);
         if (!allowedPlaceholders.contains(placeholder)) {
-            throw new IllegalArgumentException("Model dir entry \"" + modelDir + "\" is not an allowed placeholder, expected one of " + allowedPlaceholders + ".");
+            throw new IllegalArgumentException("Model dir entry \"" + modelDir + "\" is not an allowed placeholder, expected one of " + expectedPlaceholders() + ".");
         }
         if (subpathIndex >= 0) {
             validatePlaceholderSubpath(modelDir, modelDir.substring(subpathIndex + 1));
         }
+    }
+
+    private Set<String> expectedPlaceholders() {
+        if (repositoryCatalog == null) {
+            return allowedPlaceholders;
+        }
+        Set<String> expected = new TreeSet<>(allowedPlaceholders);
+        expected.add(RepositoryCatalog.PLACEHOLDER + "/<id>");
+        return expected;
     }
 
     // A placeholder expands to a directory of the session, so a subpath stays inside the session exactly when no

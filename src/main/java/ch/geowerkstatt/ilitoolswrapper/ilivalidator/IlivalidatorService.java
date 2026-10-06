@@ -8,6 +8,7 @@ import ch.geowerkstatt.ilitoolswrapper.healthcheck.ServiceHealthCheck;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.ModelDirValidator;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryArchiveExtractor;
+import ch.geowerkstatt.ilitoolswrapper.modeldir.RepositoryCatalog;
 import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.proto.common.StatusUpdate;
 import ch.geowerkstatt.ilitoolswrapper.proto.ilivalidator.IlivalidatorFileStart;
@@ -73,6 +74,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
      * @param ilitoolsRunner the IlitoolsRunner to use for running the ilivalidator tool
      * @param privateNetworkPolicy whether model repository URLs may resolve into non-public address ranges
      * @param pluginCatalog the ilivalidator plugins this deployment offers for a request to select
+     * @param repositoryCatalog the model repositories this deployment offers as {@code %REPOSITORIES/<id>} entries
      * @param toolTimeout the timeout for the ilivalidator process, or {@code null} to disable the timeout
      */
     public IlivalidatorService(
@@ -80,10 +82,11 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             IlitoolsRunner ilitoolsRunner,
             PrivateNetworkPolicy privateNetworkPolicy,
             PluginCatalog pluginCatalog,
+            RepositoryCatalog repositoryCatalog,
             @Nullable Timeout toolTimeout) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
-        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
+        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, repositoryCatalog, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
         this.pluginCatalog = pluginCatalog;
         this.toolTimeout = toolTimeout;
     }

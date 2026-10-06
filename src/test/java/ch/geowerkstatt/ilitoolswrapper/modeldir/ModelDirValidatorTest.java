@@ -1,7 +1,11 @@
 package ch.geowerkstatt.ilitoolswrapper.modeldir;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -13,6 +17,9 @@ public final class ModelDirValidatorTest {
     private static final List<String> ILIVALIDATOR_MODEL_DIRS = List.of("https://models.interlis.ch/");
     private static final Set<String> ILI2GPKG_PLACEHOLDERS = Set.of("%XTF_DIR", "%ILI_FROM_DB");
     private static final List<String> ILI2GPKG_MODEL_DIRS = List.of("%ILI_FROM_DB", "https://models.interlis.ch/");
+
+    @TempDir
+    private Path repositoryRoot;
 
     @Test
     void emptyListJoinsToDefaultValue() {
@@ -50,6 +57,42 @@ public final class ModelDirValidatorTest {
     void placeholderWithSubpathIsAccepted() {
         assertEquals("%ITF_DIR/repository;%ITF_DIR/models", ilivalidator().validateAndJoin(List.of("%ITF_DIR/repository", "%ITF_DIR/models")));
         assertEquals("%XTF_DIR/repository/sub", ili2gpkg().validateAndJoin(List.of("%XTF_DIR/repository/sub")));
+    }
+
+    @Test
+    void offeredRepositoryIsExpandedToItsDirectory() throws IOException {
+        Path repository = Files.createDirectory(repositoryRoot.resolve("dmav@0.1.1"));
+
+        assertEquals(
+                "%ITF_DIR/models;" + repository.toAbsolutePath(),
+                ilivalidatorOffering(repositoryRoot).validateAndJoin(List.of("%ITF_DIR/models", "%REPOSITORIES/dmav@0.1.1")));
+    }
+
+    @Test
+    void repositoryThatIsNotOfferedIsRejected() {
+        assertRejected(ilivalidatorOffering(repositoryRoot), "%REPOSITORIES/dmav@0.1.1");
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> ilivalidatorOffering(repositoryRoot).validateAndJoin(List.of("%REPOSITORIES/dmav@0.1.1")));
+        String message = Objects.requireNonNull(exception.getMessage(), "Rejection must carry a message.");
+        assertTrue(message.contains("offered"), "The rejection should say that the repository is not offered, but was: " + message);
+    }
+
+    @Test
+    void repositoryPlaceholderIsRejectedByAToolThatOffersNoRepositories() throws IOException {
+        Files.createDirectory(repositoryRoot.resolve("dmav@0.1.1"));
+
+        assertRejected(ili2gpkg(), "%REPOSITORIES/dmav@0.1.1");
+    }
+
+    @Test
+    void unknownPlaceholderRejectionNamesTheRepositoryPlaceholder() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> ilivalidatorOffering(repositoryRoot).validateAndJoin(List.of("%REPOSITORY/dmav@0.1.1")));
+        String message = Objects.requireNonNull(exception.getMessage(), "Rejection must carry a message.");
+        assertTrue(message.contains("%REPOSITORIES"), "A misspelled placeholder should point at the right one, but was: " + message);
     }
 
     @Test
@@ -179,15 +222,19 @@ public final class ModelDirValidatorTest {
     }
 
     private static ModelDirValidator ilivalidator() {
-        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, PrivateNetworkPolicy.ALLOW, ILIVALIDATOR_MODEL_DIRS);
+        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, new RepositoryCatalog(null), PrivateNetworkPolicy.ALLOW, ILIVALIDATOR_MODEL_DIRS);
+    }
+
+    private static ModelDirValidator ilivalidatorOffering(Path repositoryRoot) {
+        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, new RepositoryCatalog(repositoryRoot), PrivateNetworkPolicy.ALLOW, ILIVALIDATOR_MODEL_DIRS);
     }
 
     private static ModelDirValidator ili2gpkg() {
-        return new ModelDirValidator(ILI2GPKG_PLACEHOLDERS, PrivateNetworkPolicy.ALLOW, ILI2GPKG_MODEL_DIRS);
+        return new ModelDirValidator(ILI2GPKG_PLACEHOLDERS, null, PrivateNetworkPolicy.ALLOW, ILI2GPKG_MODEL_DIRS);
     }
 
     private static ModelDirValidator blockingPrivateNetworks() {
-        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, PrivateNetworkPolicy.BLOCK, ILIVALIDATOR_MODEL_DIRS);
+        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, new RepositoryCatalog(null), PrivateNetworkPolicy.BLOCK, ILIVALIDATOR_MODEL_DIRS);
     }
 
     private static void assertRejected(ModelDirValidator validator, String entry) {
