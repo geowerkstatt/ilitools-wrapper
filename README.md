@@ -28,6 +28,12 @@ Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Dock
 | `ILITOOLS_REPOSITORIES_DIR` | nicht gesetzt | Verzeichnis mit einem Unterordner pro angebotenem Modell-Repository. Ohne Angabe bietet das Deployment keine Repositories an (siehe [Angebotene Repositories](#angebotene-repositories)) |
 | `MODELDIR_ALLOW_PRIVATE_NETWORKS` | `false` | Erlaubt `modelDirs`-URLs, die in nicht öffentliche Adressbereiche auflösen (siehe [Modell-Repositories und Profile](#modell-repositories-und-profile)) |
 
+### Volume für den Ilitools-Cache
+
+Der Ilitools-Cache liegt im Docker-Image im Volume `/var/cache/ilicache`. Damit der Cache auch beim Neuerstellen des Containers bestehen bleibt, sollte ein persistiertes Volume dazu verwendet werden. Das Verzeichnis muss für den Benutzer des Containers (UID `1234`) beschreibbar sein.
+
+Für jede Prozessierung wird ein Session-Cache angelegt, in den der gemeinsame Cache kopiert wird. Deshalb wird ein Volume auf einem XFS-Dateisystem mit Reflinks (`reflink=1`, Standard seit xfsprogs 5.1) empfohlen. Mit einem Reflink kann die Kopie einer Datei schneller erstellt werden und es wird kein zusätzlicher Speicher belegt, bis sie verändert wird.
+
 ## Modell-Repositories und Profile
 
 Beide Services nehmen in der `info`-Nachricht zwei optionale Felder, mit denen die Auflösung der INTERLIS-Modelle und der Validierungs-Profile gesteuert wird. Die Werte werden unverändert an das Tool weitergegeben, nur ein [angebotenes Repository](#angebotene-repositories) ersetzt der Wrapper durch sein Verzeichnis:
