@@ -18,6 +18,7 @@ import com.google.protobuf.ByteString;
 import io.grpc.BindableService;
 import io.grpc.StatusException;
 import io.grpc.stub.BlockingClientCall;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -47,7 +48,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 10, unit = TimeUnit.SECONDS)
 public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
-    private record Response(boolean success, String log, Path outputFilePath) { }
+    private record Response(boolean success, String log, String xtfLog, @Nullable Path outputFilePath) {
+        private Path requireOutputFilePath() {
+            if (outputFilePath == null) {
+                throw new IllegalStateException("Output file path is not available for this response.");
+            }
+            return outputFilePath;
+        }
+    }
 
     private static final int PORT = 5678;
     private static final Path OUTPUT_DIR = Path.of("test-out", "ili2gpkg");
@@ -77,8 +85,9 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "schema_import.gpkg");
         assertTrue(response.success, "Schema import failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
 
-        try (var connection = new GpkgConnection(response.outputFilePath)) {
+        try (var connection = new GpkgConnection(response.requireOutputFilePath())) {
             connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
             connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
             connection.assertHasTable("gpkg_contents", Set.of("table_name", "data_type", "identifier", "description", "last_change", "min_x", "min_y", "max_x", "max_y", "srs_id"));
@@ -105,7 +114,8 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "schema_import_invalid.gpkg");
         assertFalse(response.success, "Schema import should have failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
-        assertFalse(Files.exists(response.outputFilePath), "Failed schema import should not create a database");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
+        assertFalse(Files.exists(response.requireOutputFilePath()), "Failed schema import should not create a database");
     }
 
     @Test
@@ -121,8 +131,9 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_import.gpkg");
         assertTrue(response.success, "Import failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
 
-        try (var connection = new GpkgConnection(response.outputFilePath)) {
+        try (var connection = new GpkgConnection(response.requireOutputFilePath())) {
             connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
             connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
 
@@ -151,8 +162,9 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_import_multiple.gpkg");
         assertTrue(response.success, "Import failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
 
-        try (var connection = new GpkgConnection(response.outputFilePath)) {
+        try (var connection = new GpkgConnection(response.requireOutputFilePath())) {
             connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
             connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
 
@@ -185,7 +197,8 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_import_invalid.gpkg");
         assertFalse(response.success, "Import should have failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
-        assertFalse(Files.exists(response.outputFilePath), "Failed import should not create a database");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
+        assertFalse(Files.exists(response.requireOutputFilePath()), "Failed import should not create a database");
     }
 
     @Test
@@ -200,9 +213,10 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         Response response = readResponse(call, Ili2gpkgFileType.TRANSFER_FILE, "data_export.xtf");
         assertTrue(response.success, "Export failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
 
         try (InputStream expectedStream = IntegrationTestSupport.getResourceStream("ili2gpkg/expected/export.xtf");
-             InputStream actualStream = Files.newInputStream(response.outputFilePath)) {
+             InputStream actualStream = Files.newInputStream(response.requireOutputFilePath())) {
             assertEqualXtfFiles(expectedStream, actualStream);
         }
     }
@@ -224,7 +238,7 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         assertTrue(response.success, "Export with model dir placeholders failed. Log:\n" + response.log);
 
         try (InputStream expectedStream = IntegrationTestSupport.getResourceStream("ili2gpkg/expected/export.xtf");
-             InputStream actualStream = Files.newInputStream(response.outputFilePath)) {
+             InputStream actualStream = Files.newInputStream(response.requireOutputFilePath())) {
             assertEqualXtfFiles(expectedStream, actualStream);
         }
     }
@@ -241,7 +255,8 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         Response response = readResponse(call, Ili2gpkgFileType.TRANSFER_FILE, "data_export_invalid.xtf");
         assertFalse(response.success, "Export should have failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
-        assertFalse(Files.exists(response.outputFilePath), "Failed export should not create a transfer file");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
+        assertFalse(Files.exists(response.requireOutputFilePath()), "Failed export should not create a transfer file");
     }
 
     @Test
@@ -260,8 +275,9 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_update.gpkg");
         assertTrue(response.success, "Update failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
 
-        try (var connection = new GpkgConnection(response.outputFilePath)) {
+        try (var connection = new GpkgConnection(response.requireOutputFilePath())) {
             connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
             connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
 
@@ -288,7 +304,8 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_update_invalid.gpkg");
         assertFalse(response.success, "Update should have failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
-        assertFalse(Files.exists(response.outputFilePath), "Failed update should not create a database");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
+        assertFalse(Files.exists(response.requireOutputFilePath()), "Failed update should not create a database");
     }
 
     @Test
@@ -300,9 +317,10 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/data.gpkg");
         call.halfClose();
 
-        Response response = readResponse(call, Ili2gpkgFileType.XTF_LOG_FILE, "log.xtf");
+        Response response = readResponse(call, null, null);
         assertTrue(response.success, "Validation failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
     }
 
     @Test
@@ -314,21 +332,22 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/data_invalid.gpkg");
         call.halfClose();
 
-        Response response = readResponse(call, Ili2gpkgFileType.XTF_LOG_FILE, "log_failed.xtf");
+        Response response = readResponse(call, null, null);
         assertFalse(response.success, "Validation should have failed. Log:\n" + response.log);
         assertNotEquals("", response.log, "Log is empty");
-        assertTrue(Files.exists(response.outputFilePath), "Failed validation should create an xtf log file");
+        assertNotEquals("", response.xtfLog, "Failed validation should create an xtf log file");
     }
 
     private static Response readResponse(
             BlockingClientCall<ConvertRequest, ConvertResponse> call,
-            Ili2gpkgFileType outputFileType,
-            String outputFileName) throws StatusException, InterruptedException, IOException {
+            @Nullable Ili2gpkgFileType outputFileType,
+            @Nullable String outputFileName) throws StatusException, InterruptedException, IOException {
         boolean success = false;
         StringBuilder logBuilder = new StringBuilder();
+        StringBuilder xtfLogBuilder = new StringBuilder();
         Ili2gpkgFileStart currentFile = null;
         OutputStream outputFileStream = null;
-        Path outputFilePath = OUTPUT_DIR.resolve(outputFileName);
+        Path outputFilePath = outputFileName != null ? OUTPUT_DIR.resolve(outputFileName) : null;
 
         try {
             ConvertResponse response;
@@ -346,7 +365,12 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
                             ByteString chunkData = response.getChunk();
                             if (currentFile.getType() == Ili2gpkgFileType.LOG_FILE) {
                                 logBuilder.append(chunkData.toStringUtf8());
+                            } else if (currentFile.getType() == Ili2gpkgFileType.XTF_LOG_FILE) {
+                                xtfLogBuilder.append(chunkData.toStringUtf8());
                             } else if (currentFile.getType() == outputFileType) {
+                                if (outputFilePath == null) {
+                                    Assertions.fail("Missing output file path for file type: " + outputFileType);
+                                }
                                 if (outputFileStream == null) {
                                     outputFileStream = Files.newOutputStream(outputFilePath);
                                 }
@@ -367,7 +391,7 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
             }
         }
 
-        return new Response(success, logBuilder.toString(), outputFilePath);
+        return new Response(success, logBuilder.toString(), xtfLogBuilder.toString(), outputFilePath);
     }
 
     private static ConvertRequest info(ConvertOperation operation, Consumer<ConvertRequestInfo.Builder> configureInfo) {

@@ -55,7 +55,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     // as the %XTF_DIR and %JAR_DIR do not contain model files and upgrades the URL to HTTPS.
     private static final List<String> DEFAULT_MODEL_DIRS = List.of("%ILI_FROM_DB", "https://models.interlis.ch/");
 
-    private record ProcessingArguments(Ili2gpkgFileType outputFileType, boolean returnOutputOnError, List<String> arguments) { }
+    private record ProcessingArguments(@Nullable Ili2gpkgFileType outputFileType, List<String> arguments) { }
 
     private static final Logger LOGGER = Logger.getLogger(Ili2gpkgService.class.getName());
     private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
@@ -351,7 +351,6 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             List<ProcessingFile> subjects;
             ProcessingFile dbFile;
             Ili2gpkgFileType outputFileType;
-            boolean returnOutputOnError = false;
             List<String> args = new ArrayList<>();
             switch (Objects.requireNonNull(info).getOperation()) {
                 case OPERATION_SCHEMA_IMPORT -> {
@@ -388,15 +387,12 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     args.add("--update");
                 }
                 case OPERATION_VALIDATE -> {
-                    outputFileType = Ili2gpkgFileType.XTF_LOG_FILE;
-                    // The xtf log holds the reported errors, so it is returned even when the validation fails.
-                    returnOutputOnError = true;
+                    // The log and xtf log files are always returned, so validate needs no extra output type.
+                    outputFileType = null;
                     subjects = List.of();
                     dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
-                    ProcessingFile xtfLogFile = files.create(Ili2gpkgFileType.XTF_LOG_FILE, "log", "xtf");
                     args.add("--validate");
                     args.add("--verbose");
-                    addArgument(args, "--xtflog", xtfLogFile.filePath().toAbsolutePath().toString());
                     info = info.toBuilder()
                             .setDisableValidation(false)
                             .build();
@@ -419,6 +415,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             ProcessingFile logFile = files.create(Ili2gpkgFileType.LOG_FILE, "log", "txt");
             addArgument(args, "--log", logFile.filePath().toAbsolutePath().toString());
 
+            ProcessingFile xtfLogFile = files.create(Ili2gpkgFileType.XTF_LOG_FILE, "log", "xtf");
+            addArgument(args, "--xtflog", xtfLogFile.filePath().toAbsolutePath().toString());
+
             addFlag(args, "--disableValidation", info.getDisableValidation());
             addFlag(args, "--createBasketCol", info.getCreateBasketCol());
             addFlag(args, "--sqlEnableNull", info.getSqlEnableNull());
@@ -433,7 +432,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                         .collect(Collectors.joining(";"));
                 args.add(subject);
             }
-            return Optional.of(new ProcessingArguments(outputFileType, returnOutputOnError, args));
+            return Optional.of(new ProcessingArguments(outputFileType, args));
         }
 
         private static void addFlag(List<String> args, String flag, boolean enabled) {
@@ -497,7 +496,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             try {
                 responseObserver.onNext(createStatusResponse(success));
                 returnFile(responseObserver, Ili2gpkgFileType.LOG_FILE);
-                if (success || processingArguments.returnOutputOnError()) {
+                returnFile(responseObserver, Ili2gpkgFileType.XTF_LOG_FILE);
+                if (success && processingArguments.outputFileType() != null) {
                     returnFile(responseObserver, processingArguments.outputFileType());
                 }
                 responseObserver.onCompleted();

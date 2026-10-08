@@ -64,7 +64,7 @@ public final class Ili2gpkgServiceTest {
         assertArrayEquals("data".getBytes(StandardCharsets.UTF_8), created.contents());
         assertTrue(created.isClosed(), "File should be closed once the request completes.");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -80,12 +80,12 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        assertEquals(3, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
+        assertEquals(4, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
 
         assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), created.contents());
         assertTrue(created.isClosed(), "File should be closed once the request completes.");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -109,7 +109,7 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        assertEquals(5, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
+        assertEquals(6, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
 
         assertArrayEquals("<TRANSFER></TRANSFER>".getBytes(StandardCharsets.UTF_8), xtfFile1.contents());
         assertTrue(xtfFile1.isClosed(), "File should be closed once the request completes.");
@@ -120,7 +120,7 @@ public final class Ili2gpkgServiceTest {
         assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), txtFile.contents());
         assertTrue(txtFile.isClosed(), "File should be closed once the request completes.");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -162,7 +162,7 @@ public final class Ili2gpkgServiceTest {
         assertTrue(args.contains("--importTid"));
         assertTrue(args.contains("--strokeArcs"));
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -194,7 +194,7 @@ public final class Ili2gpkgServiceTest {
         assertArgumentWithValue(args, "--modeldir", "%ILI_FROM_DB;https://models.interlis.ch/");
         assertFalse(args.contains("--metaConfig"));
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -246,7 +246,7 @@ public final class Ili2gpkgServiceTest {
         assertArgumentWithValue(args, "--modeldir", "%ILI_FROM_DB;%XTF_DIR;https://models.interlis.ch/");
         assertArgumentWithValue(args, "--metaConfig", "ilidata:DEFAULT");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -318,7 +318,7 @@ public final class Ili2gpkgServiceTest {
                 Arguments.of(ConvertOperation.OPERATION_IMPORT, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.TRANSFER_FILE, Ili2gpkgFileType.DB_FILE)),
                 Arguments.of(ConvertOperation.OPERATION_EXPORT, Ili2gpkgFileType.TRANSFER_FILE, List.of(Ili2gpkgFileType.DB_FILE)),
                 Arguments.of(ConvertOperation.OPERATION_UPDATE, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.TRANSFER_FILE, Ili2gpkgFileType.DB_FILE)),
-                Arguments.of(ConvertOperation.OPERATION_VALIDATE, Ili2gpkgFileType.XTF_LOG_FILE, List.of(Ili2gpkgFileType.DB_FILE))
+                Arguments.of(ConvertOperation.OPERATION_VALIDATE, null, List.of(Ili2gpkgFileType.DB_FILE))
         );
     }
 
@@ -339,7 +339,10 @@ public final class Ili2gpkgServiceTest {
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, resultType);
+        var expectedFileTypes = resultType == null
+                ? new Ili2gpkgFileType[]{Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE}
+                : new Ili2gpkgFileType[]{Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, resultType};
+        assertHasResponses(true, expectedFileTypes);
     }
 
     @Test
@@ -471,7 +474,7 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        assertHasResponses(false, Ili2gpkgFileType.LOG_FILE);
+        assertHasResponses(false, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE);
     }
 
     @Test
@@ -576,7 +579,7 @@ public final class Ili2gpkgServiceTest {
         assertFalse(arguments.args().contains("5.4.0"), "The version must not appear in the CLI arguments.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, ilitoolsRunner.versionsQueriedFor(), "The service must consult its own tool's versions.");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -593,7 +596,7 @@ public final class Ili2gpkgServiceTest {
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals("", arguments.toolVersion(), "Without a selection the deployment default must run.");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test

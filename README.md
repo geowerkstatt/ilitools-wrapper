@@ -161,7 +161,7 @@ Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet u
 | `OPERATION_IMPORT` | Importiert eine Transferdatei in ein bestehendes GeoPackage | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
 | `OPERATION_EXPORT` | Exportiert ein GeoPackage in eine Transferdatei | `DB_FILE` (`.gpkg`) | `TRANSFER_FILE` (`.xtf`) |
 | `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
-| `OPERATION_VALIDATE` | Validiert die Daten in einem GeoPackage | `DB_FILE` (`.gpkg`) | `XTF_LOG_FILE` (`.xtf`) |
+| `OPERATION_VALIDATE` | Validiert die Daten in einem GeoPackage | `DB_FILE` (`.gpkg`) | Keine zusätzliche Datei |
 
 Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig` sowie der optionale Dateityp `REPOSITORY_ARCHIVE` zur Verfügung, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile). Zusatzfunktionen aus Plugins lassen sich über `pluginIds` zuschalten, siehe [Plugins zuschalten](#plugins-zuschalten); ili2gpkg kann mit `OPERATION_VALIDATE` ebenfalls validieren und nimmt dieselbe Tool-Option.
 
@@ -175,8 +175,8 @@ Nachdem der Anfrage-Stream abgeschlossen ist, werden die Daten verarbeitet.
 Nach der Verarbeitung antwortet der Server mit `ConvertResponse`-Nachrichten in folgender Reihenfolge:
 
 1. Ein `StatusUpdate`, das angibt, ob die Verarbeitung erfolgreich war.
-2. Die Log-Datei des ili2gpkg-Prozesses, aufgeteilt in `fileStart` und einen oder mehrere `chunk`s.
-3. Bei Erfolg wird zusätzlich die Ausgabedatei der Operation gesendet, ebenfalls aufgeteilt in `fileStart` und `chunk`s. Bei `OPERATION_VALIDATE` wird das `XTF_LOG_FILE` auch im Fehlerfall gesendet, da es die gemeldeten Validierungsfehler enthält.
+2. Die Log-Datei und XTF-Log-Datei des ili2gpkg-Prozesses, jeweils aufgeteilt in `fileStart` und einen oder mehrere `chunk`s.
+3. Bei Erfolg wird zusätzlich die Ausgabedatei der Operation gesendet, ebenfalls aufgeteilt in `fileStart` und `chunk`s.
 
 ## Ilivalidator service
 
