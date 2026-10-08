@@ -356,10 +356,12 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 case OPERATION_SCHEMA_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
                     subjects = files.getAll(Ili2gpkgFileType.MODEL_FILE);
-                    if (subjects.size() != 1) {
+                    if (subjects.size() != 1 || files.getAll(Ili2gpkgFileType.DB_FILE).size() > 1) {
                         return Optional.empty();
                     }
-                    dbFile = files.create(Ili2gpkgFileType.DB_FILE, "output", "gpkg");
+                    dbFile = files
+                            .getSingle(Ili2gpkgFileType.DB_FILE)
+                            .orElseGet(() -> files.create(Ili2gpkgFileType.DB_FILE, "output", "gpkg"));
                     args.add("--schemaimport");
                 }
                 case OPERATION_IMPORT -> {

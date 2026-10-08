@@ -361,6 +361,25 @@ public final class Ili2gpkgServiceTest {
     }
 
     @Test
+    void schemaImportAllowsExistingDatabase() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(info(ConvertOperation.OPERATION_SCHEMA_IMPORT));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("model file"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("db file"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
+    }
+
+    @Test
     void schemaImportWithMultipleModelFilesIsRejected() {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 

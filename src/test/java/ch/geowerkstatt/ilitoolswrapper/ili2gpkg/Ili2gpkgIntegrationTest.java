@@ -103,6 +103,38 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
     }
 
     @Test
+    public void testSchemaImportWithExistingDatabase() throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        call.write(info(ConvertOperation.OPERATION_SCHEMA_IMPORT, info -> info.setCreateBasketCol(true)));
+        writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/schema.gpkg");
+        writeResourceFile(call, Ili2gpkgFileType.MODEL_FILE, "ili2gpkg/model2.ili");
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "schema_import_with_existing_database.gpkg");
+        assertTrue(response.success, "Schema import failed. Log:\n" + response.log);
+        assertNotEquals("", response.log, "Log is empty");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
+
+        try (var connection = new GpkgConnection(response.requireOutputFilePath())) {
+            connection.assertHasTable("model2classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
+            connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
+            connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
+            connection.assertHasTable("gpkg_contents", Set.of("table_name", "data_type", "identifier", "description", "last_change", "min_x", "min_y", "max_x", "max_y", "srs_id"));
+            connection.assertHasTable("gpkg_geometry_columns", Set.of("table_name", "column_name", "geometry_type_name", "srs_id", "z", "m"));
+            connection.assertHasTable("gpkg_spatial_ref_sys", Set.of("srs_name", "srs_id", "organization", "organization_coordsys_id", "definition", "description"));
+
+            connection.assertData("model2classa", "T_Id", List.of());
+            connection.assertData("classa", "T_Id", List.of());
+            connection.assertData("apoint", "T_Id", List.of());
+            connection.assertData("gpkg_geometry_columns", "table_name", List.of(
+                    Map.of("table_name", "apoint", "column_name", "ageometry", "geometry_type_name", "POINT", "srs_id", 2056, "z", 0, "m", 0)
+            ));
+        }
+    }
+
+    @Test
     public void testSchemaImportFailsWithInvalidModel() throws Exception {
         var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
         var call = client.convert();
