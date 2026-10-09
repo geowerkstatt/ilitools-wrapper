@@ -39,6 +39,18 @@ public final class IlitoolsProcessRunnerTest {
     }
 
     @Test
+    void runFindsTheXtfDiffToolInItsDistributionLayout() throws Exception {
+        String defaultVersion = System.getenv("XTF_DIFF_VERSION");
+        assertNotNull(defaultVersion, "The test task must set XTF_DIFF_VERSION.");
+
+        // Unlike the ilitools, the distribution keeps its jar below lib/ of a folder named after the version.
+        new IlitoolsProcessRunner()
+                .run(IlitoolsRunner.Tool.XTF_DIFF, defaultVersion, List.of("--version"),
+                        new IlitoolsRunner.Timeout(30, TimeUnit.SECONDS), false)
+                .get();
+    }
+
+    @Test
     void runRejectsAVersionOutsideTheOfferedSet() {
         IlitoolsProcessRunner runner = new IlitoolsProcessRunner();
 

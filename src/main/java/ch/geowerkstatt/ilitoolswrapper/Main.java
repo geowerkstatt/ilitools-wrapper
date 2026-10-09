@@ -11,6 +11,7 @@ import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.runner.IliSessionCache;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsProcessRunner;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
+import ch.geowerkstatt.ilitoolswrapper.xtfdiff.XtfDiffService;
 import io.grpc.protobuf.services.ProtoReflectionServiceV1;
 
 import java.io.IOException;
@@ -33,10 +34,12 @@ public final class Main {
         final Ili2gpkgService ili2gpkgService = new Ili2gpkgService(fileManager, ilitoolsRunner, privateNetworkPolicy, pluginCatalog, toolTimeout);
         final IlivalidatorService ilivalidatorService = new IlivalidatorService(
                 fileManager, ilitoolsRunner, privateNetworkPolicy, pluginCatalog, repositoryCatalog, toolTimeout);
+        final XtfDiffService xtfDiffService = new XtfDiffService(fileManager, ilitoolsRunner, privateNetworkPolicy, repositoryCatalog, toolTimeout);
 
         final ServiceHealthCheckManager serviceHealthCheckManager = new ServiceHealthCheckManager(
                 ili2gpkgService,
-                ilivalidatorService
+                ilivalidatorService,
+                xtfDiffService
         );
 
         final IlitoolsWrapperServer server = new IlitoolsWrapperServer(
@@ -44,7 +47,8 @@ public final class Main {
                 ProtoReflectionServiceV1.newInstance(),
                 serviceHealthCheckManager.getHealthService(),
                 ili2gpkgService,
-                ilivalidatorService
+                ilivalidatorService,
+                xtfDiffService
         );
         server.closeOnShutdown(serviceHealthCheckManager);
         server.start();
