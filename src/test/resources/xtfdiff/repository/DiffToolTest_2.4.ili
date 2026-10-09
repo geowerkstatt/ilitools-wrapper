@@ -1,0 +1,114 @@
+INTERLIS 2.4;
+
+MODEL DiffToolTest AT "mailto:noreply@localhost" VERSION "2026-01-21" =
+
+    DOMAIN
+        Coord2 = COORD
+            2460000.00 .. 2870000.00 [INTERLIS.m],
+            1045000.00 .. 1310000.00 [INTERLIS.m],
+            ROTATION 2 -> 1;
+
+        MultiCoord2 = MULTICOORD
+            2460000.00 .. 2870000.00 [INTERLIS.m],
+            1045000.00 .. 1310000.00 [INTERLIS.m],
+            ROTATION 2 -> 1;
+
+        TextDomain = TEXT*20;
+
+    TOPIC TypesTopic =
+        OID AS INTERLIS.UUIDOID;
+
+        CLASS PrimitiveTypes =
+            Number: 0.00 .. 100.00;
+            Bool: BOOLEAN;
+            Text: TextDomain;
+            MText: MTEXT*20;
+            Enum: (red (rose, crimson, ruby), green, blue);
+            Alignment: HALIGNMENT;
+            Date: DATETIME;
+            Blackbox: BLACKBOX BINARY;
+        END PrimitiveTypes;
+
+        STRUCTURE Struct =
+            Text: TextDomain;
+        END Struct;
+
+        CLASS NestedTypes =
+            TextList: LIST OF TextDomain;
+            TextBag: BAG OF TextDomain;
+            Struct: Struct;
+            StructBag: BAG OF Struct;
+            CoordBag: BAG OF Coord2; !! Xtf24Reader does not allow more than one element.
+        END NestedTypes;
+
+        CLASS GeometryTypes =
+            Point: Coord2;
+            MultiPoint: MultiCoord2;
+            Line: POLYLINE WITH (STRAIGHTS, ARCS) VERTEX Coord2;
+            MultiLine: MULTIPOLYLINE WITH (STRAIGHTS, ARCS) VERTEX Coord2;
+            Surface: SURFACE WITH (STRAIGHTS, ARCS) VERTEX Coord2 WITHOUT OVERLAPS > 0.002;
+            MultiSurface: MULTISURFACE WITH (STRAIGHTS, ARCS) VERTEX Coord2 WITHOUT OVERLAPS > 0.002;
+            Area: AREA WITH (STRAIGHTS, ARCS) VERTEX Coord2 WITHOUT OVERLAPS > 0.002;
+            MultiArea: MULTIAREA WITH (STRAIGHTS, ARCS) VERTEX Coord2 WITHOUT OVERLAPS > 0.002;
+        END GeometryTypes;
+
+        CLASS UnstableIds =
+            NO OID;
+            Text: TextDomain;
+        END UnstableIds;
+    END TypesTopic;
+
+    TOPIC ReferencesTopic =
+        OID AS INTERLIS.UUIDOID;
+
+        CLASS B =
+        END B;
+
+        CLASS C =
+        END C;
+
+        CLASS D =
+        END D;
+
+        CLASS E =
+        END E;
+
+        CLASS F =
+            NO OID;
+        END F;
+
+        CLASS A =
+            RefAttr: BAG OF REFERENCE TO B;
+        END A;
+
+        !! Eingebettete Beziehung
+        ASSOCIATION A_C =
+            RoleA -- {0..1} A;
+            RoleC -- {0..*} C;
+
+            text : TextDomain;
+        END A_C;
+
+        !! Nicht eingebettete Beziehung
+        ASSOCIATION A_D =
+            RoleA -- {*} A;
+            RoleD -- {*} D;
+
+            text : TextDomain;
+        END A_D;
+
+        !! Eingebettete Beziehung ohne Attribute
+        ASSOCIATION A_E =
+            RoleA -- {0..1} A;
+            RoleE -- {0..*} E;
+        END A_E;
+
+        !! Nicht eingebettete Beziehung mit gemischten Zielklassen (stabile und instabile OID)
+        ASSOCIATION A_Mixed =
+            RoleAMixed -- {*} A;
+            RoleMixed -- {*} B OR F;
+        END A_Mixed;
+
+    END ReferencesTopic;
+
+END DiffToolTest.

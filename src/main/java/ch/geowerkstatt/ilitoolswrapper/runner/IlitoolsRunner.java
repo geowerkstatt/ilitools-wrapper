@@ -4,6 +4,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -18,9 +19,27 @@ public interface IlitoolsRunner {
      */
     enum Tool {
         /** The {@code ili2gpkg} tool, converting between INTERLIS transfer files and GeoPackage. */
-        ILI2GPKG,
+        ILI2GPKG("ili2gpkg-%1$s.jar"),
         /** The {@code ilivalidator} tool, validating INTERLIS transfer files against their models. */
-        ILIVALIDATOR,
+        ILIVALIDATOR("ilivalidator-%1$s.jar"),
+        /** The {@code XTF-Diff-Tool}, listing the changes between two states of an INTERLIS transfer file. */
+        XTF_DIFF("XTF-Diff-Tool-%1$s/lib/XTF-Diff-Tool-%1$s.jar");
+
+        private final String jarPathPattern;
+
+        Tool(String jarPathPattern) {
+            this.jarPathPattern = jarPathPattern;
+        }
+
+        /**
+         * The jar to run, relative to the directory of the given version: where the distribution of the tool puts it.
+         *
+         * @param version the version whose jar is located
+         * @return the relative path of the jar
+         */
+        public String jarPath(String version) {
+            return String.format(Locale.ROOT, jarPathPattern, version);
+        }
     }
 
     /**
