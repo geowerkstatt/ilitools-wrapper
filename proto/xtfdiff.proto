@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "ch.geowerkstatt.ilitoolswrapper.proto.xtfdiff";
+option java_outer_classname = "XtfDiffProto";
+option csharp_namespace = "Geowerkstatt.IlitoolsWrapperApi.XtfDiff";
+
+package ilitoolswrapper.xtfdiff;
+
+import "common.proto";
+
+service XtfDiffService {
+  rpc Diff(stream DiffRequest) returns (stream DiffResponse) {}
+}
+
+enum XtfDiffFileType {
+  // The earlier state of the transfer. An object only in this file is reported as deleted.
+  OLD_TRANSFER_FILE = 0;
+  // The later state of the transfer. An object only in this file is reported as added.
+  NEW_TRANSFER_FILE = 1;
+  LOG_FILE = 2;
+  // The changes from the old to the new state as a JSON array, described in OutputFileDescription.md of the
+  // XTF-Diff-Tool. Returned only when the tool succeeded.
+  DIFF_FILE = 3;
+}
+
+message XtfDiffFileStart {
+  XtfDiffFileType type = 1;
+}
+
+message DiffRequestInfo {
+  repeated string modelDirs = 1;
+}
+
+message DiffRequest {
+  oneof payload {
+    DiffRequestInfo info = 1;
+    XtfDiffFileStart fileStart = 2;
+    bytes chunk = 3;
+  }
+}
+
+message DiffResponse {
+  oneof payload {
+    ilitoolswrapper.common.StatusUpdate status = 1;
+    XtfDiffFileStart fileStart = 2;
+    bytes chunk = 3;
+  }
+}

@@ -9,7 +9,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -192,7 +191,7 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         try (Stream<Path> candidates = Files.list(home)) {
             TreeSet<String> versions = candidates.filter(Files::isDirectory)
                     .map(directory -> directory.getFileName().toString())
-                    .filter(version -> Files.isRegularFile(home.resolve(version).resolve(jarName(tool, version))))
+                    .filter(version -> Files.isRegularFile(home.resolve(version).resolve(tool.jarPath(version))))
                     .collect(Collectors.toCollection(TreeSet::new));
             return Collections.unmodifiableSet(versions);
         } catch (IOException e) {
@@ -209,16 +208,12 @@ public final class IlitoolsProcessRunner implements IlitoolsRunner {
         String version = toolVersion.version();
 
         String toolHome = requireEnvironmentVariable(tool + "_HOME");
-        Path toolPath = Path.of(toolHome, version, jarName(tool, version)).toAbsolutePath();
+        Path toolPath = Path.of(toolHome, version).resolve(tool.jarPath(version)).toAbsolutePath();
         if (!Files.isRegularFile(toolPath)) {
             throw new IllegalStateException(tool + " not found at: " + toolPath);
         }
 
         return toolPath.toString();
-    }
-
-    private static String jarName(Tool tool, String version) {
-        return tool.name().toLowerCase(Locale.ROOT) + "-" + version + ".jar";
     }
 
     private String requireEnvironmentVariable(String name) {

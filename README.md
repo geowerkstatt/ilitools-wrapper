@@ -11,7 +11,7 @@ Der ilitools-wrapper stellt verschiedene INTERLIS Tools als gRPC-Server zur Verf
 
 Java 25 (LTS) oder neuer wird benötigt, um den `ilitools-wrapper` auszuführen.
 
-Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Docker Images werden automatisch die konfigurierten Versionen von ili2gpkg und ilivalidator heruntergeladen und konfiguriert.
+Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Docker Images werden automatisch die konfigurierten Versionen von ili2gpkg, ilivalidator und dem XTF-Diff-Tool heruntergeladen und konfiguriert.
 
 ## Konfiguration
 
@@ -24,20 +24,22 @@ Beim Starten der Anwendung mittels Gradle `run` Task und beim Erstellen des Dock
 | `ILI2GPKG_VERSION` | Aus Dockerfile oder gradle.properties | Voreinstellung der ili2gpkg-Version, wenn ein Request keine wählt (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)) |
 | `ILIVALIDATOR_HOME` | Aus Dockerfile oder Gradle `run` Task | Installationsverzeichnis von ilivalidator, ein Unterordner pro angebotener Version |
 | `ILIVALIDATOR_VERSION` | Aus Dockerfile oder gradle.properties | Voreinstellung der ilivalidator-Version, wenn ein Request keine wählt (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)) |
+| `XTF_DIFF_HOME` | Aus Dockerfile oder Gradle `run` Task | Installationsverzeichnis des XTF-Diff-Tools, ein Unterordner pro Version |
+| `XTF_DIFF_VERSION` | Aus Dockerfile oder gradle.properties | Version des XTF-Diff-Tools, die läuft (siehe [XtfDiff service](#xtfdiff-service)) |
 | `ILITOOLS_PLUGINS_DIR` | nicht gesetzt | Verzeichnis mit einem Unterordner pro angebotenem Plugin. Ohne Angabe bietet das Deployment keine Plugins an (siehe [Plugins zuschalten](#plugins-zuschalten)) |
 | `ILITOOLS_REPOSITORIES_DIR` | nicht gesetzt | Verzeichnis mit einem Unterordner pro angebotenem Modell-Repository. Ohne Angabe bietet das Deployment keine Repositories an (siehe [Angebotene Repositories](#angebotene-repositories)) |
 | `MODELDIR_ALLOW_PRIVATE_NETWORKS` | `false` | Erlaubt `modelDirs`-URLs, die in nicht öffentliche Adressbereiche auflösen (siehe [Modell-Repositories und Profile](#modell-repositories-und-profile)) |
 
 ## Modell-Repositories und Profile
 
-Beide Services nehmen in der `info`-Nachricht zwei optionale Felder, mit denen die Auflösung der INTERLIS-Modelle und der Validierungs-Profile gesteuert wird. Die Werte werden unverändert an das Tool weitergegeben, nur ein [angebotenes Repository](#angebotene-repositories) ersetzt der Wrapper durch sein Verzeichnis:
+Die Services nehmen in der `info`-Nachricht zwei optionale Felder, mit denen die Auflösung der INTERLIS-Modelle und der Validierungs-Profile gesteuert wird; der `XtfDiffService` nimmt nur `modelDirs`. Die Werte werden unverändert an das Tool weitergegeben, nur ein [angebotenes Repository](#angebotene-repositories) ersetzt der Wrapper durch sein Verzeichnis:
 
 | Feld | Tool-Argument | Beschreibung |
 | --- | --- | --- |
 | `modelDirs` | `--modeldir` | Geordnete Liste von Modell-Repositories, in Listenreihenfolge mit `;` zusammengefügt |
 | `metaConfig` | `--metaConfig` | Meta-Konfiguration in der Form `ilidata:<DatasetId>`, vom Tool über die `modelDirs` aufgelöst |
 
-Ohne Angabe gelten die Modell-Repositories `%ILI_FROM_DB;https://models.interlis.ch/` für ili2gpkg, sowie `https://models.interlis.ch/` für ilivalidator. Dies ist sehr nahe am Standard-Verhalten der Tools, verwendet jedoch HTTPS für das Standard-Repository und ignoriert nicht vorhandene Ordner wie `%JAR_DIR/ilimodels` sowie Ordner, die im ilitools-wrapper keine Modelle beinhalten (z.B. `%XTF_DIR` oder `%ITF_DIR` ohne `models`- oder `repository`-Unterordner). Die Modelle werden damit über das Standard-Repository bzw. den `ILI_CACHE` aufgelöst.
+Ohne Angabe gelten die Modell-Repositories `%ILI_FROM_DB;https://models.interlis.ch/` für ili2gpkg, sowie `https://models.interlis.ch/` für ilivalidator und das XTF-Diff-Tool. Dies ist sehr nahe am Standard-Verhalten der Tools, verwendet jedoch HTTPS für das Standard-Repository und ignoriert nicht vorhandene Ordner wie `%JAR_DIR/ilimodels` sowie Ordner, die im ilitools-wrapper keine Modelle beinhalten (z.B. `%XTF_DIR` oder `%ITF_DIR` ohne `models`- oder `repository`-Unterordner). Die Modelle werden damit über das Standard-Repository bzw. den `ILI_CACHE` aufgelöst.
 
 Ein gesetztes `modelDirs` **ersetzt den Default des Tools vollständig**. Wer die Standard-Repositories weiterhin braucht, gibt sie explizit als Eintrag an (z.B. `https://models.interlis.ch/`).
 
@@ -50,7 +52,9 @@ Erlaubte Einträge:
     - `%ITF_DIR` (`IlivalidatorService`): das Verzeichnis der Transferdatei, also das Session-Verzeichnis des Aufrufs. Mitgesendete Dateien liegen in eigenen Unterordnern: Modell-Dateien in `%ITF_DIR/models`, das entpackte Repository-Archiv in `%ITF_DIR/repository` (siehe die beiden folgenden Abschnitte).
     - `%XTF_DIR` (`Ili2gpkgService`): dasselbe Verzeichnis, mit denselben Unterordnern (`%XTF_DIR/models`, `%XTF_DIR/repository`).
     - `%ILI_FROM_DB` (`Ili2gpkgService`): das im GeoPackage selbst abgelegte Modell. Nötig, sobald `modelDirs` gesetzt ist, weil dieser Eintrag sonst mit dem Tool-Default verloren geht.
-- `%REPOSITORIES/<id>` (nur `IlivalidatorService`): ein Repository, das das Deployment anbietet. Diesen Platzhalter kennt das Tool nicht, der Wrapper ersetzt ihn durch das Verzeichnis des Repositorys (siehe [Angebotene Repositories](#angebotene-repositories)).
+- `%REPOSITORIES/<id>` (`IlivalidatorService` und `XtfDiffService`): ein Repository, das das Deployment anbietet. Diesen Platzhalter kennt das Tool nicht, der Wrapper ersetzt ihn durch das Verzeichnis des Repositorys (siehe [Angebotene Repositories](#angebotene-repositories)).
+
+Das XTF-Diff-Tool kennt keine Platzhalter, es reicht `--modeldir` unverändert an die Modellverwaltung von ili2c weiter. Der `XtfDiffService` nimmt deshalb nur URLs und angebotene Repositories.
 
 Ein Verzeichnis-Eintrag wird vom Tool nicht rekursiv gescannt (gemessen an ilivalidator 1.15.0): `%ITF_DIR` sieht die Unterordner nicht, jede Quelle ist nur über ihren eigenen Eintrag sichtbar, und genau das macht ihre Reihenfolge konfigurierbar.
 
@@ -94,7 +98,7 @@ Da jede Quelle ihren eigenen Unterordner hat, ist auch die Kombination mit einem
 
 Repositories, die viele Aufrufe brauchen und kein Aufruf verantwortet, etwa amtliche Modelle und Referenzdaten, bietet das Deployment aus einem Verzeichnis an (`ILITOOLS_REPOSITORIES_DIR`, siehe [Konfiguration](#konfiguration)). Das Verzeichnis enthält **einen Unterordner pro Repository**, dessen Name die Id ist, und darin das Repository, wie es sonst ein Webserver ausliefern würde. Wie das Plugin-Verzeichnis liest der Wrapper es bei jedem Request, ein neu abgelegtes Repository ist ohne Neustart verfügbar; der Contract kennt nur Ids, nie Pfade.
 
-Ein Request adressiert ein Repository in `modelDirs` als `%REPOSITORIES/<id>`, bisher nur beim `IlivalidatorService`. Der Wrapper gleicht die Id mit den angebotenen Unterordnern ab und ersetzt den Eintrag durch das Verzeichnis des Repositorys. Eine Id, die das Deployment nicht anbietet, lehnt er mit `INVALID_ARGUMENT` ab, bevor eine Datei entgegengenommen wird; die Meldung nennt die angebotenen Ids. Die Konvention `<name>@<version>` (etwa `dmav@0.1.1`) hält wie bei den Plugins fest, gegen welchen Stand eine Konfiguration geschrieben ist.
+Ein Request adressiert ein Repository in `modelDirs` als `%REPOSITORIES/<id>`, beim `IlivalidatorService` und beim `XtfDiffService`. Der Wrapper gleicht die Id mit den angebotenen Unterordnern ab und ersetzt den Eintrag durch das Verzeichnis des Repositorys. Eine Id, die das Deployment nicht anbietet, lehnt er mit `INVALID_ARGUMENT` ab, bevor eine Datei entgegengenommen wird; die Meldung nennt die angebotenen Ids. Die Konvention `<name>@<version>` (etwa `dmav@0.1.1`) hält wie bei den Plugins fest, gegen welchen Stand eine Konfiguration geschrieben ist.
 
 Das Tool liest ein angebotenes Repository direkt aus dem Verzeichnis, ohne Download und ohne Kopie in einen Cache. Jeder Lauf sieht damit den aktuellen Inhalt. Wer ihn nachführt, etwa Referenzdaten, ersetzt eine Datei atomar (schreiben, dann umbenennen), damit kein Lauf eine halb geschriebene liest.
 
@@ -104,7 +108,7 @@ Ein angebotenes Repository stammt aus dem Deployment und damit aus einer geprüf
 
 Ein Plugin stellt benutzerdefinierte Funktionen bereit, die ein Modell in seinen Constraints aufrufen kann. Ohne das passende Plugin lässt sich ein solcher Constraint nicht auswerten.
 
-**Beide Services** haben dafür das optionale Feld `pluginIds` in der `info`-Nachricht. Der Wrapper nimmt keine Jars im Request entgegen, sondern bietet an, was sein Plugin-Verzeichnis enthält (`ILITOOLS_PLUGINS_DIR`, siehe [Konfiguration](#konfiguration)). Das Verzeichnis enthält **einen Unterordner pro Plugin**, dessen Name die Id ist, und darin die Jar-Dateien des Plugins. Ein Unterordner ohne Jar gilt nicht als Plugin. Ob das Verzeichnis ins Image gebacken oder hineingemountet wird, ist eine Deployment-Entscheidung; der Contract kennt nur Ids.
+**Die Services für ili2gpkg und ilivalidator** haben dafür das optionale Feld `pluginIds` in der `info`-Nachricht. Der Wrapper nimmt keine Jars im Request entgegen, sondern bietet an, was sein Plugin-Verzeichnis enthält (`ILITOOLS_PLUGINS_DIR`, siehe [Konfiguration](#konfiguration)). Das Verzeichnis enthält **einen Unterordner pro Plugin**, dessen Name die Id ist, und darin die Jar-Dateien des Plugins. Ein Unterordner ohne Jar gilt nicht als Plugin. Ob das Verzeichnis ins Image gebacken oder hineingemountet wird, ist eine Deployment-Entscheidung; der Contract kennt nur Ids.
 
 Das Feld `pluginIds` der `info`-Nachricht wählt aus dieser Menge aus. Es heisst nach dem, was es trägt, und nicht nach der Tool-Option: `--plugins` nimmt einen einzelnen Ordner, den der Wrapper aus dieser Auswahl erst zusammenstellt.
 
@@ -122,7 +126,7 @@ Die Menge wird bei **jedem** Request aus dem Verzeichnis gelesen. Ein neu abgele
 
 ## Werkzeug-Version wählen
 
-Der Wrapper bringt pro Werkzeug eine oder mehrere Versionen mit, je Version ein Unterordner von `{TOOL}_HOME` (etwa `/opt/ilivalidator/1.15.0`). Das optionale Feld `toolVersion` der `info`-Nachricht wählt eine davon. Ist das Feld leer, gilt die Voreinstellung aus `{TOOL}_VERSION`; eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird.
+Der Wrapper bringt pro Werkzeug eine oder mehrere Versionen mit, je Version ein Unterordner von `{TOOL}_HOME` (etwa `/opt/ilivalidator/1.15.0`). Das optionale Feld `toolVersion` der `info`-Nachricht wählt eine davon. Ist das Feld leer, gilt die Voreinstellung aus `{TOOL}_VERSION`; eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. Der `XtfDiffService` bietet keine Wahl an, bei ihm läuft immer die Version aus `XTF_DIFF_VERSION`.
 
 Die Voreinstellung ist bewusst von der neusten Version entkoppelt: so lässt sich eine neue Version anbieten, ohne dass sie automatisch greift, etwa weil sie experimentell ist. Welche Version tatsächlich lief, steht im Log-Kopf des Werkzeugs (`ilivalidator-1.15.0-...`); eine Lieferung trägt den Nachweis also mit.
 
@@ -251,6 +255,48 @@ Nach der Verarbeitung antwortet der Server mit `ValidateResponse`-Nachrichten in
 3. Die XTF-Logdatei (`--xtflog`) mit den strukturierten Validierungsergebnissen, ebenfalls aufgeteilt in `fileStart` und `chunk`s.
 
 Beide Logdateien werden immer zurückgegeben, auch im Fehlerfall, da sie die eigentlichen Validierungsergebnisse enthalten.
+
+## XtfDiff service
+
+Der `XtfDiffService` kapselt das [XTF-Diff-Tool](https://github.com/geowerkstatt/XTF-Diff-Tool), das die Änderungen zwischen zwei Ständen einer INTERLIS-Transferdatei auflistet.
+Der Service stellt eine einzige RPC-Methode bereit:
+
+```proto
+rpc Diff(stream DiffRequest) returns (stream DiffResponse)
+```
+
+### Ablauf einer Anfrage
+
+Die `DiffRequest`-Nachrichten müssen in folgender Reihenfolge gesendet werden:
+
+1. Genau eine `DiffRequestInfo` zuerst. Sie trägt nur `modelDirs`, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile).
+2. Pro Eingabedatei:
+    1. Ein `XtfDiffFileStart`, welcher den Dateityp definiert.
+    2. Direkt anschliessend der jeweilige Dateiinhalt in einer oder mehreren `chunk`-Nachrichten.
+
+Erwartet werden genau zwei Transferdateien: der alte Stand als `OLD_TRANSFER_FILE` und der neue als `NEW_TRANSFER_FILE`. Die Rolle bestimmt der Dateityp, nicht die Reihenfolge im Request. Ein Objekt, das nur im alten Stand vorkommt, gilt als gelöscht, eines nur im neuen als hinzugefügt. Fehlt ein Stand oder kommt einer doppelt, lehnt der Wrapper den Request mit `INVALID_ARGUMENT` ab, bevor das Tool startet.
+
+Das Tool sucht die Modelle nur in `modelDirs`, nicht neben den Transferdateien. Modell-Dateien oder ein Repository-Archiv nimmt der Service deshalb nicht an; ein Modell, das kein öffentliches Repository führt, bietet das Deployment als [angebotenes Repository](#angebotene-repositories) an.
+
+Die maximale Grösse einer eingehenden Nachricht beträgt 100 MB.
+Falls eine Datei grösser ist, muss sie auf mehrere Chunks aufgeteilt werden.
+
+### Was das Tool vergleicht
+
+Gelesen im Quellcode des XTF-Diff-Tools 1.0.20:
+
+- Beide Stände müssen dieselbe INTERLIS-Version und dieselben Modelle verwenden. Sonst scheitert das Tool, und den Grund nennt nur das Log (`XTF files use different INTERLIS versions` bzw. `XTF files use different INTERLIS models`).
+- Das Tool ordnet die Objekte der beiden Stände über ihre OID einander zu und vergleicht deshalb nur Klassen und Assoziationen, die im Modell eine OID haben. Die übrigen überspringt es mit der Warnung `Class or Association "<Name>" has no stable OID.` im Log. Ein Modell ohne OID ergibt so ein leeres Diff, auch wenn sich die Daten unterscheiden.
+- Beide Dateien liest das Tool vollständig in den Speicher.
+
+### Ablauf der Antwort
+
+Nachdem der Anfrage-Stream abgeschlossen ist, vergleicht das Tool die beiden Stände.
+Danach antwortet der Server mit `DiffResponse`-Nachrichten in folgender Reihenfolge:
+
+1. Ein `StatusUpdate`, das angibt, ob der Vergleich gelang.
+2. Die Log-Datei (`--logfile`) des XTF-Diff-Tools, aufgeteilt in `fileStart` und einen oder mehrere `chunk`s.
+3. Bei Erfolg das `DIFF_FILE` mit den Änderungen als JSON-Array, wie es die [OutputFileDescription.md](https://github.com/geowerkstatt/XTF-Diff-Tool/blob/main/OutputFileDescription.md) des Tools beschreibt, ebenfalls aufgeteilt in `fileStart` und `chunk`s.
 
 ## Testen mit grpcurl
 
