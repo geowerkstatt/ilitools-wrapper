@@ -12,6 +12,7 @@ import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ExportTransferFormat;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgServiceGrpc;
@@ -157,6 +158,12 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 return;
             }
 
+            if (ExportTransferFormat.UNRECOGNIZED.equals(info.getTransferFormat())) {
+                LOGGER.warning("Received info message with unrecognized export transfer format (" + info.getTransferFormatValue() + ").");
+                cancelWithError(Status.INVALID_ARGUMENT.withDescription("Unrecognized export transfer format."));
+                return;
+            }
+
             // Rejected here rather than during argument mapping, so that no file is received for a request that cannot run.
             // The plugin ids are resolved against the catalog on every request, so a plugin added to the configured
             // directory is selectable without restarting the service. The tool version is matched against the
@@ -164,6 +171,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             try {
                 modelDirArgument = modelDirValidator.validateAndJoin(info.getModelDirsList());
                 ModelDirValidator.validateMetaConfig(info.getMetaConfig());
+                ModelDirValidator.validateValidConfig(info.getValidConfig());
                 requestedPlugins = pluginCatalog.validate(info.getPluginIdsList());
                 requestedToolVersion = validateToolVersion(info.getToolVersion());
             } catch (IllegalArgumentException e) {
@@ -274,8 +282,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 LOGGER.fine("Processing data with ili2gpkg.");
                 Optional<ProcessingArguments> parsedArguments = convertRequestToArguments();
                 if (parsedArguments.isEmpty()) {
-                    LOGGER.warning("Invalid input files for convert request.");
-                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("Invalid input files for convert request."));
+                    LOGGER.warning("Invalid arguments for convert request.");
+                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("Invalid arguments for convert request."));
                     return;
                 }
 
@@ -375,7 +383,14 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
                 case OPERATION_EXPORT -> {
                     outputFileType = Ili2gpkgFileType.TRANSFER_FILE;
-                    subjects = List.of(files.create(Ili2gpkgFileType.TRANSFER_FILE, "output", "xtf"));
+                    String outputExtension = switch (info.getTransferFormat()) {
+                        case TRANSFER_FORMAT_XTF -> "xtf";
+                        case TRANSFER_FORMAT_ITF -> "itf";
+                        case TRANSFER_FORMAT_GML -> "gml";
+                        // onInfo already rejects UNRECOGNIZED, so this cannot be reached by a request.
+                        default -> throw new IllegalStateException("Unsupported export transfer format: " + info.getTransferFormat());
+                    };
+                    subjects = List.of(files.create(Ili2gpkgFileType.TRANSFER_FILE, "output", outputExtension));
                     dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--export");
                 }
@@ -410,9 +425,13 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             addArgument(args, "--models", String.join(";", info.getModelsList()));
             addArgument(args, "--modeldir", modelDirArgument);
             addArgument(args, "--metaConfig", info.getMetaConfig());
+            addArgument(args, "--validConfig", info.getValidConfig());
             addArgument(args, "--plugins", materializePlugins(dbFile).map(Path::toString).orElse(""));
             addArgument(args, "--defaultSrsCode", info.getDefaultSrsCode() > 0 ? Integer.toString(info.getDefaultSrsCode()) : null);
             addArgument(args, "--dataset", info.getDataset());
+            addArgument(args, "--topics", String.join(";", info.getTopicsList()));
+            addArgument(args, "--baskets", String.join(";", info.getBasketsList()));
+            addArgument(args, "--exportModels", String.join(";", info.getExportModelsList()));
 
             ProcessingFile logFile = files.create(Ili2gpkgFileType.LOG_FILE, "log", "txt");
             addArgument(args, "--log", logFile.filePath().toAbsolutePath().toString());
@@ -427,6 +446,20 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             addFlag(args, "--skipGeometryErrors", info.getSkipGeometryErrors());
             addFlag(args, "--importTid", info.getImportTid());
             addFlag(args, "--strokeArcs", info.getStrokeArcs());
+            addFlag(args, "--createFk", info.getCreateFk());
+            addFlag(args, "--createGeomIdx", info.getCreateGeomIdx());
+            addFlag(args, "--createEnumTabs", info.getCreateEnumTabs());
+            addFlag(args, "--createTidCol", info.getCreateTidCol());
+            addFlag(args, "--beautifyEnumDispName", info.getBeautifyEnumDispName());
+            addFlag(args, "--smart1Inheritance", info.getSmart1Inheritance());
+            addFlag(args, "--smart2Inheritance", info.getSmart2Inheritance());
+            addFlag(args, "--sqlColsAsText", info.getSqlColsAsText());
+            addFlag(args, "--doSchemaImport", info.getDoSchemaImport());
+            addFlag(args, "--deleteData", info.getDeleteData());
+            addFlag(args, "--skipPolygonBuilding", info.getSkipPolygonBuilding());
+            addFlag(args, "--importBid", info.getImportBid());
+            addFlag(args, "--disableAreaValidation", info.getDisableAreaValidation());
+            addFlag(args, "--forceTypeValidation", info.getForceTypeValidation());
 
             if (!subjects.isEmpty()) {
                 String subject = subjects.stream()

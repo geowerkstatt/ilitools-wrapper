@@ -9,6 +9,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ExportTransferFormat;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
@@ -312,6 +313,40 @@ public final class Ili2gpkgServiceTest {
         assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
     }
 
+    @Test
+    void validatePassesValidConfigAsArgument() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_VALIDATE)
+                        .setValidConfig("ilidata:ch.geow.validconfig"))
+                .build());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertArgumentWithValue(arguments.args(), "--validConfig", "ilidata:ch.geow.validconfig");
+    }
+
+    @Test
+    void validConfigFilePathIsRejected() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_VALIDATE)
+                        .setValidConfig("/app/processing/other-session/config.toml"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
+    }
+
     public static Stream<Arguments> expectedFileTypeProvider() {
         return Stream.of(
                 Arguments.of(ConvertOperation.OPERATION_SCHEMA_IMPORT, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.MODEL_FILE)),
@@ -369,14 +404,63 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onNext(chunk("model file"));
         requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
         requestObserver.onNext(chunk("db file"));
+        InMemoryProcessingFile uploadedDb = fileManager.lastCreatedFile();
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
         IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
+        assertArgumentWithValue(arguments.args(), "--dbfile", uploadedDb.filePath().toAbsolutePath().toString());
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
+    }
+
+    public static Stream<Arguments> transferFormatProvider() {
+        return Stream.of(
+                Arguments.of(ExportTransferFormat.TRANSFER_FORMAT_XTF, ".xtf"),
+                Arguments.of(ExportTransferFormat.TRANSFER_FORMAT_ITF, ".itf"),
+                Arguments.of(ExportTransferFormat.TRANSFER_FORMAT_GML, ".gml")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("transferFormatProvider")
+    void exportWritesTransferFileOfRequestedFormat(ExportTransferFormat transferFormat, String expectedExtension) {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_EXPORT)
+                        .setTransferFormat(transferFormat))
+                .build());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        // ili2gpkg picks the export format from the extension of the transfer file, the last argument.
+        String transferFile = arguments.args().getLast();
+        assertTrue(transferFile.endsWith(expectedExtension), "Unexpected transfer file: " + transferFile);
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.TRANSFER_FILE);
+    }
+
+    @Test
+    void unrecognizedTransferFormatIsRejected() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_EXPORT)
+                        .setTransferFormatValue(99))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
     }
 
     @Test

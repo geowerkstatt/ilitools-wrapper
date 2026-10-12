@@ -221,6 +221,19 @@ public final class ModelDirValidatorTest {
         assertTrue(message.startsWith("Ref mapping"), "Message should name the rejected option, but was: " + message);
     }
 
+    @Test
+    void validConfigAcceptsOnlyIlidataReferences() {
+        assertDoesNotThrow(() -> ModelDirValidator.validateValidConfig("ilidata:ch.geow.validconfig"));
+        assertDoesNotThrow(() -> ModelDirValidator.validateValidConfig(""));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> ModelDirValidator.validateValidConfig("config.toml"),
+                "A file path should have been rejected.");
+        String message = Objects.requireNonNull(exception.getMessage(), "Rejection must carry a message.");
+        assertTrue(message.startsWith("Valid config"), "Message should name the rejected option, but was: " + message);
+    }
+
     private static ModelDirValidator ilivalidator() {
         return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, new RepositoryCatalog(null), PrivateNetworkPolicy.ALLOW, ILIVALIDATOR_MODEL_DIRS);
     }

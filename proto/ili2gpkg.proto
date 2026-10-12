@@ -34,6 +34,12 @@ enum ConvertOperation {
   OPERATION_VALIDATE = 4;
 }
 
+enum ExportTransferFormat {
+  TRANSFER_FORMAT_XTF = 0;
+  TRANSFER_FORMAT_ITF = 1;
+  TRANSFER_FORMAT_GML = 2;
+}
+
 message ConvertRequestInfo {
   ConvertOperation operation = 1;
   repeated string models = 2;
@@ -57,6 +63,25 @@ message ConvertRequestInfo {
   // deployment default, which is deliberately decoupled from the newest offered version. A version the
   // deployment does not offer is rejected with INVALID_ARGUMENT.
   string toolVersion = 15;
+  bool createFk = 16;
+  bool createGeomIdx = 17;
+  bool createEnumTabs = 18;
+  bool createTidCol = 19;
+  bool beautifyEnumDispName = 20;
+  bool smart1Inheritance = 21;
+  bool smart2Inheritance = 22;
+  bool sqlColsAsText = 23;
+  bool doSchemaImport = 24;
+  bool deleteData = 25;
+  bool skipPolygonBuilding = 26;
+  bool importBid = 27;
+  repeated string topics = 28;
+  repeated string baskets = 29;
+  repeated string exportModels = 30;
+  ExportTransferFormat transferFormat = 31;
+  bool disableAreaValidation = 32;
+  bool forceTypeValidation = 33;
+  string validConfig = 34;
 }
 
 message ConvertRequest {

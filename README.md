@@ -58,7 +58,7 @@ Alles andere wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengen
 
 Ein URL-Eintrag ist damit per Definition ein öffentlich erreichbares Repository. Nicht publizierte Repositories werden stattdessen im Request mitgesendet oder vom Deployment angeboten.
 
-`metaConfig` unterstützt bewusst nur die Form `ilidata:<DatasetId>`: Profile sind über die `ilidata.xml` des Repositorys indexiert, eine Datei-Form wird nicht angeboten.
+`metaConfig` unterstützt bewusst nur die Form `ilidata:<DatasetId>`: Profile sind über die `ilidata.xml` des Repositorys indexiert, eine Datei-Form wird nicht angeboten. Dasselbe gilt für `validConfig` des `Ili2gpkgService`.
 
 ### Repository im Request mitsenden
 
@@ -158,8 +158,8 @@ Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet u
 | Operation | Beschreibung | Benötigte Eingabedateien | Ausgabedatei |
 | --- | --- | --- | --- |
 | `OPERATION_SCHEMA_IMPORT` | Erzeugt das GeoPackage-Schema aus einem INTERLIS-Modell. Mit einem mitgesendeten `DB_FILE` wird das bestehende Schema ergänzt | `MODEL_FILE` (`.ili`), optional `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
-| `OPERATION_IMPORT` | Importiert eine Transferdatei in ein bestehendes GeoPackage | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
-| `OPERATION_EXPORT` | Exportiert ein GeoPackage in eine Transferdatei | `DB_FILE` (`.gpkg`) | `TRANSFER_FILE` (`.xtf`) |
+| `OPERATION_IMPORT` | Importiert eine Transferdatei in ein GeoPackage. Mit `doSchemaImport` ist das `DB_FILE` optional, das GeoPackage-Schema wird dann wie beim Schema-Import erstellt | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`, optional mit `doSchemaImport`) | `DB_FILE` (`.gpkg`) |
+| `OPERATION_EXPORT` | Exportiert ein GeoPackage in eine Transferdatei | `DB_FILE` (`.gpkg`) | `TRANSFER_FILE` (`.xtf` (Standard), `.itf` oder `.gml`), basierend auf der Option `transferFormat` |
 | `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
 | `OPERATION_VALIDATE` | Validiert die Daten in einem GeoPackage | `DB_FILE` (`.gpkg`) | Keine zusätzliche Datei |
 
@@ -168,6 +168,7 @@ Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig`
 | Feld | Beschreibung |
 | --- | --- |
 | `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. |
+| `transferFormat` | Wählt das Transfer-Format für die Export-Operation: `xtf` (Standard), `itf` oder `gml` |
 
 ### Ablauf der Antwort
 
