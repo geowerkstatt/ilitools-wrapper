@@ -12,7 +12,7 @@ import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
-import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ExportTransferFormat;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.TransferFormat;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgServiceGrpc;
@@ -158,12 +158,6 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 return;
             }
 
-            if (ExportTransferFormat.UNRECOGNIZED.equals(info.getTransferFormat())) {
-                LOGGER.warning("Received info message with unrecognized export transfer format (" + info.getTransferFormatValue() + ").");
-                cancelWithError(Status.INVALID_ARGUMENT.withDescription("Unrecognized export transfer format."));
-                return;
-            }
-
             // Rejected here rather than during argument mapping, so that no file is received for a request that cannot run.
             // The plugin ids are resolved against the catalog on every request, so a plugin added to the configured
             // directory is selectable without restarting the service. The tool version is matched against the
@@ -174,6 +168,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 ModelDirValidator.validateValidConfig(info.getValidConfig());
                 requestedPlugins = pluginCatalog.validate(info.getPluginIdsList());
                 requestedToolVersion = validateToolVersion(info.getToolVersion());
+                validateTransferFormat(info);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Rejected request options: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
@@ -196,6 +191,21 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             LOGGER.fine("Received info: " + info);
         }
 
+        private void validateTransferFormat(ConvertRequestInfo info) {
+            TransferFormat format = info.getTransferFormat();
+            if (format == TransferFormat.UNRECOGNIZED) {
+                throw new IllegalArgumentException("Unrecognized transfer format (" + info.getTransferFormatValue() + ").");
+            }
+
+            boolean importsTransferFile = switch (info.getOperation()) {
+                case OPERATION_IMPORT, OPERATION_UPDATE -> true;
+                default -> false;
+            };
+            if (importsTransferFile && format != TransferFormat.TRANSFER_FORMAT_XTF && format != TransferFormat.TRANSFER_FORMAT_ITF) {
+                throw new IllegalArgumentException("Only xtf and itf formats are supported for import or update.");
+            }
+        }
+
         private void onFileStart(Ili2gpkgFileStart fileStart) {
             if (info == null) {
                 LOGGER.warning("Received file start before info message.");
@@ -206,7 +216,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             String extension = switch (type) {
                 case DB_FILE -> "gpkg";
                 case MODEL_FILE -> "ili";
-                case TRANSFER_FILE -> "xtf";
+                case TRANSFER_FILE -> getTransferFileExtension();
                 case REPOSITORY_ARCHIVE -> "zip";
                 default -> null;
             };
@@ -387,14 +397,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 }
                 case OPERATION_EXPORT -> {
                     outputFileType = Ili2gpkgFileType.TRANSFER_FILE;
-                    String outputExtension = switch (info.getTransferFormat()) {
-                        case TRANSFER_FORMAT_XTF -> "xtf";
-                        case TRANSFER_FORMAT_ITF -> "itf";
-                        case TRANSFER_FORMAT_GML -> "gml";
-                        // onInfo already rejects UNRECOGNIZED, so this cannot be reached by a request.
-                        default -> throw new IllegalStateException("Unsupported export transfer format: " + info.getTransferFormat());
-                    };
-                    subjects = List.of(files.create(Ili2gpkgFileType.TRANSFER_FILE, "output", outputExtension));
+                    subjects = List.of(files.create(Ili2gpkgFileType.TRANSFER_FILE, "output", getTransferFileExtension()));
                     dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--export");
                 }
@@ -472,6 +475,16 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 args.add(subject);
             }
             return Optional.of(new ProcessingArguments(outputFileType, args));
+        }
+
+        private String getTransferFileExtension() {
+            return switch (Objects.requireNonNull(info).getTransferFormat()) {
+                case TRANSFER_FORMAT_XTF -> "xtf";
+                case TRANSFER_FORMAT_ITF -> "itf";
+                case TRANSFER_FORMAT_GML -> "gml";
+                // onInfo already rejects UNRECOGNIZED, so this cannot be reached by a request.
+                default -> throw new IllegalStateException("Unsupported transfer format: " + info.getTransferFormat());
+            };
         }
 
         private static void addFlag(List<String> args, String flag, boolean enabled) {

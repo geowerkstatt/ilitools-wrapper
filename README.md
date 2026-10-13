@@ -162,17 +162,19 @@ Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet u
 | Operation | Beschreibung | Benötigte Eingabedateien | Ausgabedatei |
 | --- | --- | --- | --- |
 | `OPERATION_SCHEMA_IMPORT` | Erzeugt das GeoPackage-Schema aus einem INTERLIS-Modell. Mit einem mitgesendeten `DB_FILE` wird das bestehende Schema ergänzt | `MODEL_FILE` (`.ili`), optional `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
-| `OPERATION_IMPORT` | Importiert eine Transferdatei in ein GeoPackage. Mit `doSchemaImport` ist das `DB_FILE` optional, das GeoPackage-Schema wird dann wie beim Schema-Import erstellt | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`, optional mit `doSchemaImport`) | `DB_FILE` (`.gpkg`) |
-| `OPERATION_EXPORT` | Exportiert ein GeoPackage in eine Transferdatei | `DB_FILE` (`.gpkg`) | `TRANSFER_FILE` (`.xtf` (Standard), `.itf` oder `.gml`), basierend auf der Option `transferFormat` |
-| `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
+| `OPERATION_IMPORT` | Importiert eine Transferdatei in ein GeoPackage. Mit `doSchemaImport` ist das `DB_FILE` optional, das GeoPackage-Schema wird dann wie beim Schema-Import erstellt | `TRANSFER_FILE` (`.xtf` oder `.itf`), `DB_FILE` (`.gpkg`, optional mit `doSchemaImport`) | `DB_FILE` (`.gpkg`) |
+| `OPERATION_EXPORT` | Exportiert ein GeoPackage in eine Transferdatei | `DB_FILE` (`.gpkg`) | `TRANSFER_FILE` (`.xtf`, `.itf` oder `.gml`) |
+| `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf` oder `.itf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
 | `OPERATION_VALIDATE` | Validiert die Daten in einem GeoPackage | `DB_FILE` (`.gpkg`) | Keine zusätzliche Datei |
+
+Das Format der Datei(en) vom Typ `TRANSFER_FILE` ergibt sich aus der Option `transferFormat`. Mögliche Optionen sind `.xtf` (Standard), `.itf` oder `.gml` (nur Export).
 
 Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig` sowie der optionale Dateityp `REPOSITORY_ARCHIVE` zur Verfügung, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile). Zusatzfunktionen aus Plugins lassen sich über `pluginIds` zuschalten, siehe [Plugins zuschalten](#plugins-zuschalten); ili2gpkg kann mit `OPERATION_VALIDATE` ebenfalls validieren und nimmt dieselbe Tool-Option.
 
 | Feld | Beschreibung |
 | --- | --- |
 | `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. |
-| `transferFormat` | Wählt das Transfer-Format für die Export-Operation: `xtf` (Standard), `itf` oder `gml` |
+| `transferFormat` | Wählt das Transfer-Format für die Import, Update und Export-Operationen: `xtf` (Standard), `itf` oder `gml` |
 
 ### Ablauf der Antwort
 

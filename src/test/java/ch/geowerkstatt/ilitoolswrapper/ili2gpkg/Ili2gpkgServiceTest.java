@@ -9,7 +9,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
-import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ExportTransferFormat;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.TransferFormat;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
@@ -452,17 +452,73 @@ public final class Ili2gpkgServiceTest {
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
-    public static Stream<Arguments> transferFormatProvider() {
+    public static Stream<Arguments> importTransferFormatProvider() {
         return Stream.of(
-                Arguments.of(ExportTransferFormat.TRANSFER_FORMAT_XTF, ".xtf"),
-                Arguments.of(ExportTransferFormat.TRANSFER_FORMAT_ITF, ".itf"),
-                Arguments.of(ExportTransferFormat.TRANSFER_FORMAT_GML, ".gml")
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_XTF, ".xtf"),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_ITF, ".itf")
         );
     }
 
     @ParameterizedTest
-    @MethodSource("transferFormatProvider")
-    void exportWritesTransferFileOfRequestedFormat(ExportTransferFormat transferFormat, String expectedExtension) {
+    @MethodSource("importTransferFormatProvider")
+    void importUsesTransferFileOfRequestedFormat(TransferFormat transferFormat, String expectedExtension) {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_IMPORT)
+                        .setTransferFormat(transferFormat))
+                .build());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.TRANSFER_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("db"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        // ili2gpkg picks the import format from the extension of the transfer file, the last argument.
+        String transferFile = arguments.args().getLast();
+        assertTrue(transferFile.endsWith(expectedExtension), "Unexpected transfer file: " + transferFile);
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
+    }
+
+    public static Stream<Arguments> importRejectedTransferFormatProvider() {
+        return Stream.of(
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("importRejectedTransferFormatProvider")
+    void importRejectsUnsupportedTransferFormat(TransferFormat transferFormat) {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_IMPORT)
+                        .setTransferFormat(transferFormat))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNull(arguments, "The runner should not have been invoked.");
+    }
+
+    public static Stream<Arguments> exportTransferFormatProvider() {
+        return Stream.of(
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_XTF, ".xtf"),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_ITF, ".itf"),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML, ".gml")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("exportTransferFormatProvider")
+    void exportWritesTransferFileOfRequestedFormat(TransferFormat transferFormat, String expectedExtension) {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
         requestObserver.onNext(ConvertRequest.newBuilder()
