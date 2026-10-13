@@ -290,12 +290,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
             try {
                 LOGGER.fine("Processing data with ili2gpkg.");
-                Optional<ProcessingArguments> parsedArguments = convertRequestToArguments();
-                if (parsedArguments.isEmpty()) {
-                    LOGGER.warning("Invalid arguments for convert request.");
-                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("Invalid arguments for convert request."));
-                    return;
-                }
+                ProcessingArguments processingArguments = convertRequestToArguments();
 
                 if (cancelled) {
                     LOGGER.info("Processing was cancelled before the tool started, cleaning up session files.");
@@ -303,7 +298,6 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     return;
                 }
 
-                ProcessingArguments processingArguments = parsedArguments.get();
                 var runFuture = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, requestedToolVersion, processingArguments.arguments(), toolTimeout, true);
                 this.runFuture = runFuture;
                 var _ = runFuture.handleAsync((_, throwable) -> {
@@ -321,8 +315,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     return null;
                 });
             } catch (IllegalArgumentException e) {
-                // Reaches here from the plugin materialization, and from the runner's version backstop in case
-                // the offered set ever diverged between the onInfo validation and the start of the tool.
+                // Reaches here from missing or ambiguous input files and the plugin materialization during argument
+                // mapping, and from the runner's version backstop in case the offered set ever diverged between the
+                // onInfo validation and the start of the tool.
                 LOGGER.warning("Rejected during argument mapping: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
             } catch (Exception e) {
@@ -365,17 +360,20 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
         }
 
-        private Optional<ProcessingArguments> convertRequestToArguments() {
+        private ProcessingArguments convertRequestToArguments() {
             List<ProcessingFile> subjects;
             ProcessingFile dbFile;
             Ili2gpkgFileType outputFileType;
             List<String> args = new ArrayList<>();
+            if (files.getAll(Ili2gpkgFileType.DB_FILE).size() > 1) {
+                throw new IllegalArgumentException("At most one DB file is allowed.");
+            }
             switch (Objects.requireNonNull(info).getOperation()) {
                 case OPERATION_SCHEMA_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
                     subjects = files.getAll(Ili2gpkgFileType.MODEL_FILE);
-                    if (subjects.size() != 1 || files.getAll(Ili2gpkgFileType.DB_FILE).size() > 1) {
-                        return Optional.empty();
+                    if (subjects.size() != 1) {
+                        throw new IllegalArgumentException("Exactly one model file is required for schema import.");
                     }
                     dbFile = files
                             .getSingle(Ili2gpkgFileType.DB_FILE)
@@ -385,8 +383,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 case OPERATION_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
                     subjects = files.getAll(Ili2gpkgFileType.TRANSFER_FILE);
-                    if (subjects.isEmpty() || files.getAll(Ili2gpkgFileType.DB_FILE).size() > 1) {
-                        return Optional.empty();
+                    if (subjects.isEmpty()) {
+                        throw new IllegalArgumentException("At least one transfer file is required for import.");
                     }
                     // --doSchemaImport can also create the output gpkg, so an input DB_FILE is not required.
                     boolean doSchemaImport = info.getDoSchemaImport();
@@ -408,7 +406,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     outputFileType = Ili2gpkgFileType.DB_FILE;
                     subjects = files.getAll(Ili2gpkgFileType.TRANSFER_FILE);
                     if (subjects.isEmpty()) {
-                        return Optional.empty();
+                        throw new IllegalArgumentException("At least one transfer file is required for update.");
                     }
                     dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--update");
@@ -428,7 +426,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
 
             if (dbFile == null) {
-                return Optional.empty();
+                throw new IllegalArgumentException("A DB file is required for the requested operation.");
             }
 
             addArgument(args, "--dbfile", dbFile.filePath().toAbsolutePath().toString());
@@ -477,7 +475,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                         .collect(Collectors.joining(";"));
                 args.add(subject);
             }
-            return Optional.of(new ProcessingArguments(outputFileType, args));
+            return new ProcessingArguments(outputFileType, args);
         }
 
         private String getTransferFileExtension() {
