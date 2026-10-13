@@ -2,6 +2,7 @@ ARG ILI2GPKG_VERSION=5.5.2
 ARG ILI2GPKG_ADDITIONAL_VERSIONS=""
 ARG ILIVALIDATOR_VERSION=1.15.0
 ARG ILIVALIDATOR_ADDITIONAL_VERSIONS="1.14.4"
+ARG XTF_DIFF_VERSION=1.0.20
 
 FROM gradle:9-jdk25 AS build
 WORKDIR /src
@@ -10,6 +11,7 @@ ARG ILI2GPKG_VERSION
 ARG ILI2GPKG_ADDITIONAL_VERSIONS
 ARG ILIVALIDATOR_VERSION
 ARG ILIVALIDATOR_ADDITIONAL_VERSIONS
+ARG XTF_DIFF_VERSION
 ARG GRPCURL_VERSION=1.9.3
 
 RUN apt-get update \
@@ -32,6 +34,15 @@ RUN set -eu; \
       unzip -qo /tmp/ilivalidator.zip -d "/opt/ilivalidator/${version}"; \
       rm /tmp/ilivalidator.zip; \
     done
+
+# The XTF-Diff-Tool comes from its GitHub release, a single version since a request cannot select one. Its zip keeps
+# the distribution in a folder named after the version, with the jar below lib/, where IlitoolsRunner.Tool looks for it.
+# The version must stay in sync with gradle.properties.
+RUN set -eu; \
+    curl -fsSL -o /tmp/xtf-diff.zip "https://github.com/geowerkstatt/XTF-Diff-Tool/releases/download/v${XTF_DIFF_VERSION}/XTF-Diff-Tool-${XTF_DIFF_VERSION}.zip"; \
+    mkdir -p "/opt/xtf-diff/${XTF_DIFF_VERSION}"; \
+    unzip -qo /tmp/xtf-diff.zip -d "/opt/xtf-diff/${XTF_DIFF_VERSION}"; \
+    rm /tmp/xtf-diff.zip
 
 # Previews that downloads.interlis.ch does not offer are vendored in the repository, one folder per version laid out
 # like the distribution but without plugins/, which the tool would load on every run (VendoredToolsTest guards both).
@@ -58,11 +69,14 @@ WORKDIR ${HOME}
 
 ARG ILI2GPKG_VERSION
 ARG ILIVALIDATOR_VERSION
+ARG XTF_DIFF_VERSION
 ENV ILI_CACHE_BASE=/var/cache/ilicache
 ENV ILI2GPKG_VERSION=${ILI2GPKG_VERSION} \
     ILI2GPKG_HOME=/opt/ili2gpkg \
     ILIVALIDATOR_VERSION=${ILIVALIDATOR_VERSION} \
     ILIVALIDATOR_HOME=/opt/ilivalidator \
+    XTF_DIFF_VERSION=${XTF_DIFF_VERSION} \
+    XTF_DIFF_HOME=/opt/xtf-diff \
     ILITOOLS_PLUGINS_DIR=/plugins \
     ILITOOLS_REPOSITORIES_DIR=/repositories \
     ILI_CACHE=${ILI_CACHE_BASE}/shared \
@@ -93,6 +107,7 @@ USER $APP_UID
 COPY --from=build /src/build/install/ilitools-wrapper ${HOME}
 COPY --from=build /opt/ili2gpkg ${ILI2GPKG_HOME}
 COPY --from=build /opt/ilivalidator ${ILIVALIDATOR_HOME}
+COPY --from=build /opt/xtf-diff ${XTF_DIFF_HOME}
 COPY --from=build /opt/grpcurl /opt/grpcurl
 
 LABEL org.opencontainers.image.title="ilitools-wrapper" \

@@ -107,13 +107,25 @@ val ili2gpkgVersions = ili2gpkgVersion.zip(providers.gradleProperty("ili2gpkgAdd
 val ilivalidatorVersions = ilivalidatorVersion.zip(providers.gradleProperty("ilivalidatorAdditionalVersions").orElse("")) { default, additional ->
     listOf(default) + additional.split(Regex("[,\\s]+")).map(String::trim).filter(String::isNotEmpty)
 }
+// The XTF-Diff-Tool is not offered for selection, so a single version is downloaded.
+val xtfDiffVersion = providers.gradleProperty("xtfDiffVersion")
 val ilitoolsHome = layout.projectDirectory.dir("ilitools")
 val ili2gpkgHome = ilitoolsHome.dir("ili2gpkg")
 val ilivalidatorHome = ilitoolsHome.dir("ilivalidator")
+val xtfDiffHome = ilitoolsHome.dir("xtf-diff")
 
 // Downloads every offered version of a tool into ./ilitools/<toolName>/<version>/ for local development. A
 // version is a whole directory: the distribution manifest pins its exact libs/, so versions cannot share.
-fun registerIlitoolDownload(taskName: String, toolName: String, versions: Provider<List<String>>, toolHome: Directory) = tasks.register(taskName) {
+// The distribution URL and the jar inside it default to the layout of downloads.interlis.ch; the jar path has to
+// match IlitoolsRunner.Tool, which looks for the same file.
+fun registerIlitoolDownload(
+    taskName: String,
+    toolName: String,
+    versions: Provider<List<String>>,
+    toolHome: Directory,
+    distributionUrl: (String) -> String = { version -> "https://downloads.interlis.ch/$toolName/$toolName-$version.zip" },
+    jarPath: (String) -> String = { version -> "$toolName-$version.jar" },
+) = tasks.register(taskName) {
     group = "ilitools"
     description = "Downloads the offered $toolName versions into ./ilitools for local development"
 
@@ -128,11 +140,11 @@ fun registerIlitoolDownload(taskName: String, toolName: String, versions: Provid
 
         offered.forEach { version ->
             val versionDir = toolHome.dir(version).asFile
-            if (versionDir.resolve("$toolName-$version.jar").exists()) {
+            if (versionDir.resolve(jarPath(version)).exists()) {
                 return@forEach
             }
 
-            val downloadUrl = project.uri("https://downloads.interlis.ch/$toolName/$toolName-$version.zip")
+            val downloadUrl = project.uri(distributionUrl(version))
             val zipFile = temporaryDir.resolve("$toolName-$version.zip")
 
             logger.lifecycle("Downloading $downloadUrl")
@@ -152,6 +164,14 @@ fun registerIlitoolDownload(taskName: String, toolName: String, versions: Provid
 
 registerIlitoolDownload("downloadIli2gpkg", "ili2gpkg", ili2gpkgVersions, ili2gpkgHome)
 registerIlitoolDownload("downloadIlivalidator", "ilivalidator", ilivalidatorVersions, ilivalidatorHome)
+registerIlitoolDownload(
+    "downloadXtfDiff",
+    "xtf-diff",
+    xtfDiffVersion.map { version -> listOf(version) },
+    xtfDiffHome,
+    distributionUrl = { version -> "https://github.com/geowerkstatt/XTF-Diff-Tool/releases/download/v$version/XTF-Diff-Tool-$version.zip" },
+    jarPath = { version -> "XTF-Diff-Tool-$version/lib/XTF-Diff-Tool-$version.jar" },
+)
 
 // A minimal ilivalidator plugin, built here instead of pulled from a release of a real function library, so the
 // tests prove the --plugins mechanism without depending on that library's evolution and without an external
@@ -182,11 +202,13 @@ val testPluginJar = tasks.register<Jar>("testPluginJar") {
 // Automatically download and set up the ilitools on `gradlew run` and `gradlew test`.
 listOf(tasks.run, tasks.test).forEach { task ->
     task.configure {
-        dependsOn("downloadIli2gpkg", "downloadIlivalidator")
+        dependsOn("downloadIli2gpkg", "downloadIlivalidator", "downloadXtfDiff")
         environment("ILI2GPKG_HOME", ili2gpkgHome.asFile.absolutePath)
         environment("ILI2GPKG_VERSION", ili2gpkgVersion.get())
         environment("ILIVALIDATOR_HOME", ilivalidatorHome.asFile.absolutePath)
         environment("ILIVALIDATOR_VERSION", ilivalidatorVersion.get())
+        environment("XTF_DIFF_HOME", xtfDiffHome.asFile.absolutePath)
+        environment("XTF_DIFF_VERSION", xtfDiffVersion.get())
         // Keep the INTERLIS model cache inside the build directory instead of the user home.
         environment("ILI_CACHE", layout.buildDirectory.dir("ilicache").get().asFile.absolutePath)
         environment("SESSION_CACHE_DIR", layout.buildDirectory.dir("ilicache-sessions").get().asFile.absolutePath)
