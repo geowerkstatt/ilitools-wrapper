@@ -93,7 +93,7 @@ public final class Ili2gpkgServiceTest {
     void convertHandlesMultipleFiles() {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
-        requestObserver.onNext(info());
+        requestObserver.onNext(info(ConvertOperation.OPERATION_IMPORT));
         requestObserver.onNext(fileStart(Ili2gpkgFileType.TRANSFER_FILE));
         requestObserver.onNext(chunk("<TRANSFER>"));
         requestObserver.onNext(chunk("</TRANSFER>"));
@@ -103,14 +103,14 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onNext(chunk("<TRANSFER/>"));
         InMemoryProcessingFile xtfFile2 = fileManager.lastCreatedFile();
 
-        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
         requestObserver.onNext(chunk("Hello World"));
-        InMemoryProcessingFile txtFile = fileManager.lastCreatedFile();
+        InMemoryProcessingFile dbFile = fileManager.lastCreatedFile();
 
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        assertEquals(6, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
+        assertEquals(5, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
 
         assertArrayEquals("<TRANSFER></TRANSFER>".getBytes(StandardCharsets.UTF_8), xtfFile1.contents());
         assertTrue(xtfFile1.isClosed(), "File should be closed once the request completes.");
@@ -118,8 +118,8 @@ public final class Ili2gpkgServiceTest {
         assertArrayEquals("<TRANSFER/>".getBytes(StandardCharsets.UTF_8), xtfFile2.contents());
         assertTrue(xtfFile2.isClosed(), "File should be closed once the request completes.");
 
-        assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), txtFile.contents());
-        assertTrue(txtFile.isClosed(), "File should be closed once the request completes.");
+        assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), dbFile.contents());
+        assertTrue(dbFile.isClosed(), "File should be closed once the request completes.");
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
@@ -395,6 +395,42 @@ public final class Ili2gpkgServiceTest {
         assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run when a required file is missing.");
     }
 
+    public static Stream<Arguments> multipleDbFilesProvider() {
+        return Stream.of(
+                Arguments.of(ConvertOperation.OPERATION_SCHEMA_IMPORT, false, List.of(Ili2gpkgFileType.MODEL_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_IMPORT, false, List.of(Ili2gpkgFileType.TRANSFER_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_IMPORT, true, List.of(Ili2gpkgFileType.TRANSFER_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_EXPORT, false, List.of()),
+                Arguments.of(ConvertOperation.OPERATION_UPDATE, false, List.of(Ili2gpkgFileType.TRANSFER_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_VALIDATE, false, List.of())
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("multipleDbFilesProvider")
+    void operationWithMultipleDbFilesIsRejected(ConvertOperation operation, boolean doSchemaImport, List<Ili2gpkgFileType> otherInputFiles) {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(operation)
+                        .setDoSchemaImport(doSchemaImport))
+                .build());
+        for (Ili2gpkgFileType inputFile : otherInputFiles) {
+            requestObserver.onNext(fileStart(inputFile));
+            requestObserver.onNext(chunk("data"));
+        }
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("first db"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("second db"));
+        requestObserver.onCompleted();
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run when the database file is ambiguous.");
+    }
+
     @Test
     void schemaImportAllowsExistingDatabase() {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
@@ -464,7 +500,7 @@ public final class Ili2gpkgServiceTest {
     }
 
     @Test
-    void schemaImportWithMultipleModelFilesIsRejected() {
+    void schemaImportWithMultipleModelFilesIsAllowed() {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
         requestObserver.onNext(info(ConvertOperation.OPERATION_SCHEMA_IMPORT));
@@ -474,9 +510,8 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onNext(chunk("second"));
         requestObserver.onCompleted();
 
-        assertNotNull(responseObserver.error());
-        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
-        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for an ambiguous schema import.");
+        assertNull(responseObserver.error());
+        assertNotNull(ilitoolsRunner.lastArguments(), "ili2gpkg should run for a valid schema import.");
     }
 
     @Test
