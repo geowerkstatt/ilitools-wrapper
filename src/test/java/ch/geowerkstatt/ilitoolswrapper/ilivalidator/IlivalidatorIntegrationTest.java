@@ -2,6 +2,7 @@ package ch.geowerkstatt.ilitoolswrapper.ilivalidator;
 
 import ch.geowerkstatt.ilitoolswrapper.IlitoolsIntegrationTestBase;
 import ch.geowerkstatt.ilitoolswrapper.IntegrationTestSupport;
+import ch.geowerkstatt.ilitoolswrapper.LocalRepositoryServer;
 import ch.geowerkstatt.ilitoolswrapper.files.DeleteFileVisitor;
 import ch.geowerkstatt.ilitoolswrapper.files.FilesystemFileManager;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;

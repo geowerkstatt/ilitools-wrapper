@@ -375,10 +375,14 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 case OPERATION_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
                     subjects = files.getAll(Ili2gpkgFileType.TRANSFER_FILE);
-                    if (subjects.isEmpty()) {
+                    if (subjects.isEmpty() || files.getAll(Ili2gpkgFileType.DB_FILE).size() > 1) {
                         return Optional.empty();
                     }
-                    dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
+                    // --doSchemaImport can also create the output gpkg, so an input DB_FILE is not required.
+                    boolean doSchemaImport = info.getDoSchemaImport();
+                    dbFile = files
+                            .getSingle(Ili2gpkgFileType.DB_FILE)
+                            .orElseGet(() -> doSchemaImport ? files.create(Ili2gpkgFileType.DB_FILE, "output", "gpkg") : null);
                     args.add("--import");
                 }
                 case OPERATION_EXPORT -> {

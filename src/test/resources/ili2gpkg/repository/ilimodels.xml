@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Repository index of the test model repository, structured like the productive customer repositories. -->
+<TRANSFER xmlns="http://www.interlis.ch/INTERLIS2.3">
+    <HEADERSECTION SENDER="ilitools-wrapper" VERSION="2.3">
+        <MODELS>
+            <MODEL NAME="IliRepository20" VERSION="2020-04-17" URI="http://models.interlis.ch/core"/>
+        </MODELS>
+    </HEADERSECTION>
+    <DATASECTION>
+        <IliRepository20.RepositoryIndex BID="b1">
+            <IliRepository20.RepositoryIndex.ModelMetadata TID="1">
+                <Name>SimpleModel</Name>
+                <SchemaLanguage>ili2_4</SchemaLanguage>
+                <File>model.ili</File>
+                <Version>2026-07-23</Version>
+                <NameLanguage>en</NameLanguage>
+                <publishingDate>2026-07-23</publishingDate>
+                <Issuer>https://github.com/geowerkstatt/ilitools-wrapper</Issuer>
+                <technicalContact>mailto:info@geowerkstatt.ch</technicalContact>
+                <furtherInformation>https://github.com/geowerkstatt/ilitools-wrapper</furtherInformation>
+                <md5>f7e5620ce381db93a6924b65e6e4718f</md5>
+            </IliRepository20.RepositoryIndex.ModelMetadata>
+        </IliRepository20.RepositoryIndex>
+    </DATASECTION>
+</TRANSFER>

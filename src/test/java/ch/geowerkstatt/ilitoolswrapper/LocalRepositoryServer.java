@@ -1,6 +1,5 @@
-package ch.geowerkstatt.ilitoolswrapper.ilivalidator;
+package ch.geowerkstatt.ilitoolswrapper;
 
-import ch.geowerkstatt.ilitoolswrapper.IntegrationTestSupport;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -12,49 +11,57 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Serves the model repository fixture from {@code ilivalidator/repository} over HTTP on localhost, so the
- * integration tests can exercise the URL route of {@code modelDirs} without reaching a remote repository.
+ * Serves the model repository fixture from {@code ili2gpkg/repository} or {@code ilivalidator/repository} over
+ * HTTP on localhost, so the integration tests can exercise the URL route of {@code modelDirs} without reaching
+ * a remote repository.
  *
  * <p>The server binds an ephemeral port, which also keeps the INTERLIS model cache from reusing entries of an
  * earlier run. Requested paths are recorded so a test can assert which repository files the tool actually read.
  */
-final class LocalRepositoryServer implements AutoCloseable {
-    private static final String RESOURCE_DIRECTORY = "ilivalidator/repository/";
+public final class LocalRepositoryServer implements AutoCloseable {
+    private static final String ILIVALIDATOR_REPOSITORY = "ilivalidator/repository/";
+    private static final String ILI2GPKG_REPOSITORY = "ili2gpkg/repository/";
 
     private final HttpServer server;
     private final ConcurrentLinkedQueue<String> requestedPaths = new ConcurrentLinkedQueue<>();
+    private final String baseDirectory;
     private final Set<String> servedFiles;
 
-    private LocalRepositoryServer(HttpServer server, Set<String> servedFiles) {
+    private LocalRepositoryServer(HttpServer server, String baseDirectory, Set<String> servedFiles) {
         this.server = server;
+        this.baseDirectory = baseDirectory;
         this.servedFiles = servedFiles;
     }
 
-    static LocalRepositoryServer start() throws IOException {
-        return start(Set.of("ilidata.xml", "test_profile.toml"));
+    public static LocalRepositoryServer start() throws IOException {
+        return start(ILIVALIDATOR_REPOSITORY, Set.of("ilidata.xml", "test_profile.toml"));
     }
 
-    static LocalRepositoryServer startWithModels() throws IOException {
-        return start(Set.of("ilidata.xml", "test_profile.toml", "ilimodels.xml", "model.ili"));
+    public static LocalRepositoryServer startWithModels() throws IOException {
+        return start(ILIVALIDATOR_REPOSITORY, Set.of("ilidata.xml", "test_profile.toml", "ilimodels.xml", "model.ili"));
     }
 
-    static LocalRepositoryServer startWithReferenceData() throws IOException {
-        return start(Set.of("ilidata.xml", "refmapping.xtf", "refdata_449.xtf"));
+    public static LocalRepositoryServer startWithReferenceData() throws IOException {
+        return start(ILIVALIDATOR_REPOSITORY, Set.of("ilidata.xml", "refmapping.xtf", "refdata_449.xtf"));
     }
 
-    private static LocalRepositoryServer start(Set<String> servedFiles) throws IOException {
+    public static LocalRepositoryServer startIli2gpkg() throws IOException {
+        return start(ILI2GPKG_REPOSITORY, Set.of("ilimodels.xml", "model.ili"));
+    }
+
+    private static LocalRepositoryServer start(String baseDirectory, Set<String> servedFiles) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        LocalRepositoryServer repository = new LocalRepositoryServer(server, servedFiles);
+        LocalRepositoryServer repository = new LocalRepositoryServer(server, baseDirectory, servedFiles);
         server.createContext("/", repository::handle);
         server.start();
         return repository;
     }
 
-    String baseUrl() {
+    public String baseUrl() {
         return "http://localhost:" + server.getAddress().getPort() + "/";
     }
 
-    List<String> requestedPaths() {
+    public List<String> requestedPaths() {
         return List.copyOf(requestedPaths);
     }
 
@@ -75,7 +82,7 @@ final class LocalRepositoryServer implements AutoCloseable {
             return;
         }
 
-        byte[] content = IntegrationTestSupport.getResourceBytes(RESOURCE_DIRECTORY + fileName);
+        byte[] content = IntegrationTestSupport.getResourceBytes(baseDirectory + fileName);
         exchange.sendResponseHeaders(200, content.length);
         try (OutputStream responseBody = exchange.getResponseBody()) {
             responseBody.write(content);

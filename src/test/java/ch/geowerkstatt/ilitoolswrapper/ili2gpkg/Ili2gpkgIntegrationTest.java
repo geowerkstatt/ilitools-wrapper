@@ -2,6 +2,7 @@ package ch.geowerkstatt.ilitoolswrapper.ili2gpkg;
 
 import ch.geowerkstatt.ilitoolswrapper.IlitoolsIntegrationTestBase;
 import ch.geowerkstatt.ilitoolswrapper.IntegrationTestSupport;
+import ch.geowerkstatt.ilitoolswrapper.LocalRepositoryServer;
 import ch.geowerkstatt.ilitoolswrapper.files.FilesystemFileManager;
 import ch.geowerkstatt.ilitoolswrapper.modeldir.PrivateNetworkPolicy;
 import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
@@ -176,6 +177,40 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
             connection.assertData("apoint", "T_Id", List.of(
                     Map.of("T_Ili_Tid", "33333333-3333-4333-8333-333333333333")
             ));
+        }
+    }
+
+    @Test
+    public void testImportWithSchemaImportWithoutDatabase() throws Exception {
+        try (LocalRepositoryServer repository = LocalRepositoryServer.startIli2gpkg()) {
+            var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+            var call = client.convert();
+
+            // Without a database, the model is referenced by the transfer file.
+            call.write(info(ConvertOperation.OPERATION_IMPORT, info -> info
+                    .setDoSchemaImport(true)
+                    .setCreateBasketCol(true)
+                    .addModelDirs(repository.baseUrl())));
+            writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer.xtf");
+            call.halfClose();
+
+            Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_import_with_schema_import.gpkg");
+            assertTrue(response.success, "Import with schema import failed. Log:\n" + response.log);
+            assertNotEquals("", response.log, "Log is empty");
+            assertNotEquals("", response.xtfLog, "XTF log is empty");
+
+            try (var connection = new GpkgConnection(response.requireOutputFilePath())) {
+                connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
+                connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
+
+                connection.assertData("classa", "T_Id", List.of(
+                        Map.of("T_Ili_Tid", "11111111-1111-4111-8111-111111111111", "aname", "Alpha"),
+                        Map.of("T_Ili_Tid", "22222222-2222-4222-8222-222222222222", "aname", "Beta")
+                ));
+                connection.assertData("apoint", "T_Id", List.of(
+                        Map.of("T_Ili_Tid", "33333333-3333-4333-8333-333333333333")
+                ));
+            }
         }
     }
 
