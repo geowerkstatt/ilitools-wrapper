@@ -53,7 +53,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
 
     // Offers the repository fixture of LocalRepositoryServer as the repository "repository", read from the source
     // tree like OUTPUT_DIR is written relative to it, so the same files are reachable both ways.
-    private static final Path REPOSITORY_ROOT = Path.of("src", "test", "resources", "ilivalidator");
+    private static final Path REPOSITORY_ROOT = Path.of("src", "test", "resources");
 
     public IlivalidatorIntegrationTest() {
         super(PORT, OUTPUT_DIR);
@@ -560,8 +560,8 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
 
     private static byte[] repositoryArchive() throws IOException {
         return archiveOf(Map.of(
-                "ilidata.xml", resourceAsString("ilivalidator/repository/ilidata.xml"),
-                "test_profile.toml", resourceAsString("ilivalidator/repository/test_profile.toml")));
+                "ilidata.xml", resourceAsString("repository/ilidata.xml"),
+                "test_profile.toml", resourceAsString("repository/test_profile.toml")));
     }
 
     private static String resourceAsString(String resourcePath) throws IOException {
@@ -689,7 +689,7 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
                 .setScope(scope)));
         writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_refdata.xtf");
         writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_refdata.ili");
-        writeResourceFile(call, IlivalidatorFileType.REF_MAPPING_FILE, "ilivalidator/repository/refmapping.xtf");
+        writeResourceFile(call, IlivalidatorFileType.REF_MAPPING_FILE, "repository/refmapping.xtf");
         call.halfClose();
 
         return readResponse(call, xtfLogFileName);

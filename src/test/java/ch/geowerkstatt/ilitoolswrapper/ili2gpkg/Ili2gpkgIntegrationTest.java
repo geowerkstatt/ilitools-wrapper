@@ -192,7 +192,7 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
 
     @Test
     public void testImportWithSchemaImportWithoutDatabase() throws Exception {
-        try (LocalRepositoryServer repository = LocalRepositoryServer.startIli2gpkg()) {
+        try (LocalRepositoryServer repository = LocalRepositoryServer.startWithModels()) {
             var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
             var call = client.convert();
 
