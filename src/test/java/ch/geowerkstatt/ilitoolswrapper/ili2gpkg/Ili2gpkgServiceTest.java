@@ -487,7 +487,8 @@ public final class Ili2gpkgServiceTest {
 
     public static Stream<Arguments> importRejectedTransferFormatProvider() {
         return Stream.of(
-                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML)
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML_2_0)
         );
     }
 
@@ -510,15 +511,16 @@ public final class Ili2gpkgServiceTest {
 
     public static Stream<Arguments> exportTransferFormatProvider() {
         return Stream.of(
-                Arguments.of(TransferFormat.TRANSFER_FORMAT_XTF, ".xtf"),
-                Arguments.of(TransferFormat.TRANSFER_FORMAT_ITF, ".itf"),
-                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML, ".gml")
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_XTF, ".xtf", false),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_ITF, ".itf", false),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML, ".gml", false),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML_2_0, ".gml", true)
         );
     }
 
     @ParameterizedTest
     @MethodSource("exportTransferFormatProvider")
-    void exportWritesTransferFileOfRequestedFormat(TransferFormat transferFormat, String expectedExtension) {
+    void exportWritesTransferFileOfRequestedFormat(TransferFormat transferFormat, String expectedExtension, boolean expectedIliGml20) {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
         requestObserver.onNext(ConvertRequest.newBuilder()
@@ -536,6 +538,7 @@ public final class Ili2gpkgServiceTest {
         // ili2gpkg picks the export format from the extension of the transfer file, the last argument.
         String transferFile = arguments.args().getLast();
         assertTrue(transferFile.endsWith(expectedExtension), "Unexpected transfer file: " + transferFile);
+        assertEquals(expectedIliGml20, arguments.args().contains("--ILIGML20"), expectedIliGml20 ? "Missing --ILIGML20 argument." : "Unexpected --ILIGML20 argument.");
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.TRANSFER_FILE);
     }

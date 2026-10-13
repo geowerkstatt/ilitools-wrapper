@@ -398,6 +398,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                 case OPERATION_EXPORT -> {
                     outputFileType = Ili2gpkgFileType.TRANSFER_FILE;
                     subjects = List.of(files.create(Ili2gpkgFileType.TRANSFER_FILE, "output", getTransferFileExtension()));
+                    if (info.getTransferFormat().equals(TransferFormat.TRANSFER_FORMAT_GML_2_0)) {
+                        args.add("--ILIGML20");
+                    }
                     dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--export");
                 }
@@ -481,7 +484,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             return switch (Objects.requireNonNull(info).getTransferFormat()) {
                 case TRANSFER_FORMAT_XTF -> "xtf";
                 case TRANSFER_FORMAT_ITF -> "itf";
-                case TRANSFER_FORMAT_GML -> "gml";
+                case TRANSFER_FORMAT_GML, TRANSFER_FORMAT_GML_2_0 -> "gml";
                 // onInfo already rejects UNRECOGNIZED, so this cannot be reached by a request.
                 default -> throw new IllegalStateException("Unsupported transfer format: " + info.getTransferFormat());
             };

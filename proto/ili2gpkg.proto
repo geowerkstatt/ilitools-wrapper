@@ -37,7 +37,10 @@ enum ConvertOperation {
 enum TransferFormat {
   TRANSFER_FORMAT_XTF = 0;
   TRANSFER_FORMAT_ITF = 1;
+  // GML transfer format (eCH-0118-1.0), only supported for export.
   TRANSFER_FORMAT_GML = 2;
+  // GML 2.0 transfer format (eCH-0118-2.0), only supported for export.
+  TRANSFER_FORMAT_GML_2_0 = 3;
 }
 
 message ConvertRequestInfo {

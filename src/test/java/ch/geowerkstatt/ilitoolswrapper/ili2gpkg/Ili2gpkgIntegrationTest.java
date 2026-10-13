@@ -13,6 +13,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgServiceGrpc;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.TransferFormat;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsProcessRunner;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
 import com.google.protobuf.ByteString;
@@ -23,7 +24,11 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.w3c.dom.Attr;
+import org.w3c.dom.Element;
 import org.xmlunit.builder.DiffBuilder;
 import org.xmlunit.diff.DefaultNodeMatcher;
 import org.xmlunit.diff.Diff;
@@ -33,16 +38,21 @@ import org.xmlunit.diff.ElementSelectors;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
+import javax.xml.parsers.DocumentBuilderFactory;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -288,6 +298,42 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         }
     }
 
+    public static Stream<Arguments> exportTransferFormatProvider() {
+        Consumer<Path> assertXtf24 = path -> assertXmlRoot(path, "http://www.interlis.ch/xtf/2.4/INTERLIS", "transfer");
+        Consumer<Path> assertGml1 = path -> assertXmlRoot(path, "http://www.interlis.ch/INTERLIS2.3/GML32/INTERLIS", "TRANSFER");
+        Consumer<Path> assertGml2 = path -> assertXmlRoot(path, "http://www.interlis.ch/ILIGML-2.0/INTERLIS", "TRANSFER");
+        Consumer<Path> assertItf = Ili2gpkgIntegrationTest::assertItf;
+        return Stream.of(
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_XTF, "ili2gpkg/data.gpkg", MODEL_NAME, "xtf", assertXtf24),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML, "ili2gpkg/data.gpkg", MODEL_NAME, "gml", assertGml1),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML_2_0, "ili2gpkg/data.gpkg", MODEL_NAME, "gml", assertGml2),
+                // ITF requires an INTERLIS 1 model, so it is exported from a separate database.
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_ITF, "ili2gpkg/data_interlis1.gpkg", "SimpleModel1", "itf", assertItf)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("exportTransferFormatProvider")
+    public void testExportWritesRequestedTransferFormat(
+            TransferFormat transferFormat,
+            String dbResourcePath,
+            String model,
+            String extension,
+            Consumer<Path> assertFormat) throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        call.write(info(ConvertOperation.OPERATION_EXPORT, info -> info
+                .addModels(model)
+                .setTransferFormat(transferFormat)));
+        writeResourceFile(call, Ili2gpkgFileType.DB_FILE, dbResourcePath);
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.TRANSFER_FILE, "data_export_" + transferFormat.name().toLowerCase(Locale.ROOT) + "." + extension);
+        assertTrue(response.success, "Export as " + transferFormat + " failed. Log:\n" + response.log);
+        assertFormat.accept(response.requireOutputFilePath());
+    }
+
     @Test
     public void testExportWithModelDirPlaceholders() throws Exception {
         var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
@@ -507,6 +553,33 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
         }
 
         assertFalse(diff.hasDifferences(), "Expected and actual XTF files should be equal.");
+    }
+
+    // The root namespace identifies both the format and its version, e.g. XTF 2.4 or eCH-0118 GML 1.0 and 2.0.
+    private static void assertXmlRoot(Path path, String expectedNamespace, String expectedLocalName) {
+        Element root;
+        try {
+            var factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            root = factory.newDocumentBuilder().parse(path.toFile()).getDocumentElement();
+        } catch (Exception e) {
+            throw new AssertionError("Exported file is not well-formed XML: " + path, e);
+        }
+        assertEquals(expectedNamespace, root.getNamespaceURI(), "Unexpected root namespace");
+        assertEquals(expectedLocalName, root.getLocalName(), "Unexpected root element");
+    }
+
+    // ITF has no version marker, so the INTERLIS 1 block structure is the format check.
+    private static void assertItf(Path path) {
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(path, StandardCharsets.ISO_8859_1);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        assertEquals("SCNT", lines.getFirst(), "ITF must start with the SCNT block");
+        assertTrue(lines.contains("MODL SimpleModel1"), "ITF must contain the model block");
+        assertEquals("ENDE", lines.getLast(), "ITF must end with ENDE");
     }
 
     private static boolean filterAttributes(Attr attr) {

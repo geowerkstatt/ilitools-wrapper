@@ -167,14 +167,14 @@ Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet u
 | `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf` oder `.itf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
 | `OPERATION_VALIDATE` | Validiert die Daten in einem GeoPackage | `DB_FILE` (`.gpkg`) | Keine zusätzliche Datei |
 
-Das Format der Datei(en) vom Typ `TRANSFER_FILE` ergibt sich aus der Option `transferFormat`. Mögliche Optionen sind `.xtf` (Standard), `.itf` oder `.gml` (nur Export).
+Das Format der Datei(en) vom Typ `TRANSFER_FILE` ergibt sich aus der Option `transferFormat`.
 
 Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig` sowie der optionale Dateityp `REPOSITORY_ARCHIVE` zur Verfügung, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile). Zusatzfunktionen aus Plugins lassen sich über `pluginIds` zuschalten, siehe [Plugins zuschalten](#plugins-zuschalten); ili2gpkg kann mit `OPERATION_VALIDATE` ebenfalls validieren und nimmt dieselbe Tool-Option.
 
 | Feld | Beschreibung |
 | --- | --- |
 | `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. |
-| `transferFormat` | Wählt das Transfer-Format für die Import, Update und Export-Operationen: `xtf` (Standard), `itf` oder `gml` |
+| `transferFormat` | Wählt das Transfer-Format für die Import, Update und Export-Operationen. Mögliche Optionen sind `XTF` (Standard), `ITF`, `GML` oder `GML_2_0`, die beiden GML-Formate werden nur beim Export unterstützt. |
 
 ### Ablauf der Antwort
 
