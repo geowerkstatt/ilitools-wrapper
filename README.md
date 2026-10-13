@@ -289,11 +289,11 @@ Falls eine Datei grösser ist, muss sie auf mehrere Chunks aufgeteilt werden.
 
 ### Was das Tool vergleicht
 
-Gelesen im Quellcode des XTF-Diff-Tools 1.0.20:
+Gelesen im Quellcode des XTF-Diff-Tools 1.1.21:
 
 - Beide Stände müssen dieselbe INTERLIS-Version und dieselben Modelle verwenden. Sonst scheitert das Tool, und den Grund nennt nur das Log (`XTF files use different INTERLIS versions` bzw. `XTF files use different INTERLIS models`).
 - Das Tool ordnet die Objekte der beiden Stände über ihre OID einander zu und vergleicht deshalb nur Klassen und Assoziationen, die im Modell eine OID haben. Die übrigen überspringt es mit der Warnung `Class or Association "<Name>" has no stable OID.` im Log. Ein Modell ohne OID ergibt so ein leeres Diff, auch wenn sich die Daten unterscheiden.
-- Beide Dateien liest das Tool vollständig in den Speicher.
+- Beide Dateien liest das Tool vollständig in den Speicher, dazu die Lage jeder Geometrie (siehe [Ablauf der Antwort](#ablauf-der-antwort-2)).
 
 ### Ablauf der Antwort
 
@@ -303,6 +303,8 @@ Danach antwortet der Server mit `DiffResponse`-Nachrichten in folgender Reihenfo
 1. Ein `StatusUpdate`, das angibt, ob der Vergleich gelang.
 2. Die Log-Datei (`--logfile`) des XTF-Diff-Tools, aufgeteilt in `fileStart` und einen oder mehrere `chunk`s.
 3. Bei Erfolg das `DIFF_FILE` mit den Änderungen als JSON-Array, wie es die [OutputFileDescription.md](https://github.com/geowerkstatt/XTF-Diff-Tool/blob/main/OutputFileDescription.md) des Tools beschreibt, ebenfalls aufgeteilt in `fileStart` und `chunk`s.
+
+Der Wrapper ruft das Tool immer mit `--locations` auf, damit ein Client die Änderungen auf einer Karte zeigen kann: Jede Änderung trägt ihre Lage im alten und im neuen Stand (`oldLocation`, `newLocation`), sofern es eine gibt, als WKT nach OGC Simple Features in 2D.
 
 ## Testen mit grpcurl
 
