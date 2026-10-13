@@ -176,6 +176,8 @@ Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig`
 | `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. |
 | `transferFormat` | Wählt das Transfer-Format für die Import, Update und Export-Operationen. Mögliche Optionen sind `XTF` (Standard), `ITF`, `GML` oder `GML_2_0`, die beiden GML-Formate werden nur beim Export unterstützt. |
 
+Die weiteren Felder entsprechen jeweils der gleichnamigen [ili2gpkg-Option](https://github.com/claeis/ili2db/blob/master/docs/ili2db.rst#referenz).
+
 ### Ablauf der Antwort
 
 Nachdem der Anfrage-Stream abgeschlossen ist, werden die Daten verarbeitet.
