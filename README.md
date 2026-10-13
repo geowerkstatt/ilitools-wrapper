@@ -161,7 +161,7 @@ Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet u
 
 | Operation | Beschreibung | Benötigte Eingabedateien | Ausgabedatei |
 | --- | --- | --- | --- |
-| `OPERATION_SCHEMA_IMPORT` | Erzeugt das GeoPackage-Schema aus einem oder mehreren INTERLIS-Modellen. Mit einem mitgesendeten `DB_FILE` wird das bestehende Schema ergänzt | `MODEL_FILE` (`.ili`), optional `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
+| `OPERATION_SCHEMA_IMPORT` | Erzeugt das GeoPackage-Schema aus einem INTERLIS-Modell. Mit einem mitgesendeten `DB_FILE` wird das bestehende Schema ergänzt | `MODEL_FILE` (`.ili`), optional `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
 | `OPERATION_IMPORT` | Importiert eine Transferdatei in ein GeoPackage. Mit `doSchemaImport` ist das `DB_FILE` optional, das GeoPackage-Schema wird dann wie beim Schema-Import erstellt | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`, optional mit `doSchemaImport`) | `DB_FILE` (`.gpkg`) |
 | `OPERATION_EXPORT` | Exportiert ein GeoPackage in eine Transferdatei | `DB_FILE` (`.gpkg`) | `TRANSFER_FILE` (`.xtf` (Standard), `.itf` oder `.gml`), basierend auf der Option `transferFormat` |
 | `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |

@@ -500,7 +500,7 @@ public final class Ili2gpkgServiceTest {
     }
 
     @Test
-    void schemaImportWithMultipleModelFilesIsAllowed() {
+    void schemaImportWithMultipleModelFilesIsRejected() {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
         requestObserver.onNext(info(ConvertOperation.OPERATION_SCHEMA_IMPORT));
@@ -510,8 +510,9 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onNext(chunk("second"));
         requestObserver.onCompleted();
 
-        assertNull(responseObserver.error());
-        assertNotNull(ilitoolsRunner.lastArguments(), "ili2gpkg should run for a valid schema import.");
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for an ambiguous schema import.");
     }
 
     @Test
