@@ -293,7 +293,8 @@ Gelesen im Quellcode des XTF-Diff-Tools 1.1.21:
 
 - Beide Stände müssen dieselbe INTERLIS-Version und dieselben Modelle verwenden. Sonst scheitert das Tool, und den Grund nennt nur das Log (`XTF files use different INTERLIS versions` bzw. `XTF files use different INTERLIS models`).
 - Das Tool ordnet die Objekte der beiden Stände über ihre OID einander zu und vergleicht deshalb nur Klassen und Assoziationen, die im Modell eine OID haben. Die übrigen überspringt es mit der Warnung `Class or Association "<Name>" has no stable OID.` im Log. Ein Modell ohne OID ergibt so ein leeres Diff, auch wenn sich die Daten unterscheiden.
-- Beide Dateien liest das Tool vollständig in den Speicher, dazu die Lage jeder Geometrie (siehe [Ablauf der Antwort](#ablauf-der-antwort-2)).
+- Beide Dateien liest das Tool vollständig in den Speicher.
+- Für die Lagen (siehe [Ablauf der Antwort](#ablauf-der-antwort-2)) hält das Tool zusätzlich zu jeder Geometrie ein zweites WKT im Speicher, für die DMAV-Lieferung der Gemeinde Sauge rund 4 MB.
 
 ### Ablauf der Antwort
 
