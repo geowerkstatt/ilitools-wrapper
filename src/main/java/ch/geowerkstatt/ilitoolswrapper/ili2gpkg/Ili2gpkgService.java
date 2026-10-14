@@ -12,6 +12,7 @@ import ch.geowerkstatt.ilitoolswrapper.plugins.PluginCatalog;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.TransferFormat;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgServiceGrpc;
@@ -55,7 +56,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     // as the %XTF_DIR and %JAR_DIR do not contain model files and upgrades the URL to HTTPS.
     private static final List<String> DEFAULT_MODEL_DIRS = List.of("%ILI_FROM_DB", "https://models.interlis.ch/");
 
-    private record ProcessingArguments(Ili2gpkgFileType outputFileType, boolean returnOutputOnError, List<String> arguments) { }
+    private record ProcessingArguments(@Nullable Ili2gpkgFileType outputFileType, List<String> arguments) { }
 
     private static final Logger LOGGER = Logger.getLogger(Ili2gpkgService.class.getName());
     private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
@@ -164,8 +165,10 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             try {
                 modelDirArgument = modelDirValidator.validateAndJoin(info.getModelDirsList());
                 ModelDirValidator.validateMetaConfig(info.getMetaConfig());
+                ModelDirValidator.validateValidConfig(info.getValidConfig());
                 requestedPlugins = pluginCatalog.validate(info.getPluginIdsList());
                 requestedToolVersion = validateToolVersion(info.getToolVersion());
+                validateTransferFormat(info);
             } catch (IllegalArgumentException e) {
                 LOGGER.warning("Rejected request options: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
@@ -188,6 +191,21 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             LOGGER.fine("Received info: " + info);
         }
 
+        private void validateTransferFormat(ConvertRequestInfo info) {
+            TransferFormat format = info.getTransferFormat();
+            if (format == TransferFormat.UNRECOGNIZED) {
+                throw new IllegalArgumentException("Unrecognized transfer format (" + info.getTransferFormatValue() + ").");
+            }
+
+            boolean importsTransferFile = switch (info.getOperation()) {
+                case OPERATION_IMPORT, OPERATION_UPDATE -> true;
+                default -> false;
+            };
+            if (importsTransferFile && format != TransferFormat.TRANSFER_FORMAT_XTF && format != TransferFormat.TRANSFER_FORMAT_ITF) {
+                throw new IllegalArgumentException("Only xtf and itf formats are supported for import or update.");
+            }
+        }
+
         private void onFileStart(Ili2gpkgFileStart fileStart) {
             if (info == null) {
                 LOGGER.warning("Received file start before info message.");
@@ -198,7 +216,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             String extension = switch (type) {
                 case DB_FILE -> "gpkg";
                 case MODEL_FILE -> "ili";
-                case TRANSFER_FILE -> "xtf";
+                case TRANSFER_FILE -> getTransferFileExtension();
                 case REPOSITORY_ARCHIVE -> "zip";
                 default -> null;
             };
@@ -272,12 +290,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
 
             try {
                 LOGGER.fine("Processing data with ili2gpkg.");
-                Optional<ProcessingArguments> parsedArguments = convertRequestToArguments();
-                if (parsedArguments.isEmpty()) {
-                    LOGGER.warning("Invalid input files for convert request.");
-                    cancelWithError(Status.INVALID_ARGUMENT.withDescription("Invalid input files for convert request."));
-                    return;
-                }
+                ProcessingArguments processingArguments = convertRequestToArguments();
 
                 if (cancelled) {
                     LOGGER.info("Processing was cancelled before the tool started, cleaning up session files.");
@@ -285,7 +298,6 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     return;
                 }
 
-                ProcessingArguments processingArguments = parsedArguments.get();
                 var runFuture = ilitoolsRunner.run(IlitoolsRunner.Tool.ILI2GPKG, requestedToolVersion, processingArguments.arguments(), toolTimeout, true);
                 this.runFuture = runFuture;
                 var _ = runFuture.handleAsync((_, throwable) -> {
@@ -303,8 +315,9 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     return null;
                 });
             } catch (IllegalArgumentException e) {
-                // Reaches here from the plugin materialization, and from the runner's version backstop in case
-                // the offered set ever diverged between the onInfo validation and the start of the tool.
+                // Reaches here from missing or ambiguous input files and the plugin materialization during argument
+                // mapping, and from the runner's version backstop in case the offered set ever diverged between the
+                // onInfo validation and the start of the tool.
                 LOGGER.warning("Rejected during argument mapping: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
             } catch (Exception e) {
@@ -347,34 +360,45 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
         }
 
-        private Optional<ProcessingArguments> convertRequestToArguments() {
+        private ProcessingArguments convertRequestToArguments() {
             List<ProcessingFile> subjects;
             ProcessingFile dbFile;
             Ili2gpkgFileType outputFileType;
-            boolean returnOutputOnError = false;
             List<String> args = new ArrayList<>();
+            if (files.getAll(Ili2gpkgFileType.DB_FILE).size() > 1) {
+                throw new IllegalArgumentException("At most one DB file is allowed.");
+            }
             switch (Objects.requireNonNull(info).getOperation()) {
                 case OPERATION_SCHEMA_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
                     subjects = files.getAll(Ili2gpkgFileType.MODEL_FILE);
                     if (subjects.size() != 1) {
-                        return Optional.empty();
+                        throw new IllegalArgumentException("Exactly one model file is required for schema import.");
                     }
-                    dbFile = files.create(Ili2gpkgFileType.DB_FILE, "output", "gpkg");
+                    dbFile = files
+                            .getSingle(Ili2gpkgFileType.DB_FILE)
+                            .orElseGet(() -> files.create(Ili2gpkgFileType.DB_FILE, "output", "gpkg"));
                     args.add("--schemaimport");
                 }
                 case OPERATION_IMPORT -> {
                     outputFileType = Ili2gpkgFileType.DB_FILE;
                     subjects = files.getAll(Ili2gpkgFileType.TRANSFER_FILE);
                     if (subjects.isEmpty()) {
-                        return Optional.empty();
+                        throw new IllegalArgumentException("At least one transfer file is required for import.");
                     }
-                    dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
+                    // --doSchemaImport can also create the output gpkg, so an input DB_FILE is not required.
+                    boolean doSchemaImport = info.getDoSchemaImport();
+                    dbFile = files
+                            .getSingle(Ili2gpkgFileType.DB_FILE)
+                            .orElseGet(() -> doSchemaImport ? files.create(Ili2gpkgFileType.DB_FILE, "output", "gpkg") : null);
                     args.add("--import");
                 }
                 case OPERATION_EXPORT -> {
                     outputFileType = Ili2gpkgFileType.TRANSFER_FILE;
-                    subjects = List.of(files.create(Ili2gpkgFileType.TRANSFER_FILE, "output", "xtf"));
+                    subjects = List.of(files.create(Ili2gpkgFileType.TRANSFER_FILE, "output", getTransferFileExtension()));
+                    if (info.getTransferFormat().equals(TransferFormat.TRANSFER_FORMAT_GML_2_0)) {
+                        args.add("--ILIGML20");
+                    }
                     dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--export");
                 }
@@ -382,21 +406,18 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                     outputFileType = Ili2gpkgFileType.DB_FILE;
                     subjects = files.getAll(Ili2gpkgFileType.TRANSFER_FILE);
                     if (subjects.isEmpty()) {
-                        return Optional.empty();
+                        throw new IllegalArgumentException("At least one transfer file is required for update.");
                     }
                     dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
                     args.add("--update");
                 }
                 case OPERATION_VALIDATE -> {
-                    outputFileType = Ili2gpkgFileType.XTF_LOG_FILE;
-                    // The xtf log holds the reported errors, so it is returned even when the validation fails.
-                    returnOutputOnError = true;
+                    // The log and xtf log files are always returned, so validate needs no extra output type.
+                    outputFileType = null;
                     subjects = List.of();
                     dbFile = files.getSingle(Ili2gpkgFileType.DB_FILE).orElse(null);
-                    ProcessingFile xtfLogFile = files.create(Ili2gpkgFileType.XTF_LOG_FILE, "log", "xtf");
                     args.add("--validate");
                     args.add("--verbose");
-                    addArgument(args, "--xtflog", xtfLogFile.filePath().toAbsolutePath().toString());
                     info = info.toBuilder()
                             .setDisableValidation(false)
                             .build();
@@ -405,19 +426,26 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             }
 
             if (dbFile == null) {
-                return Optional.empty();
+                throw new IllegalArgumentException("A DB file is required for the requested operation.");
             }
 
             addArgument(args, "--dbfile", dbFile.filePath().toAbsolutePath().toString());
             addArgument(args, "--models", String.join(";", info.getModelsList()));
             addArgument(args, "--modeldir", modelDirArgument);
             addArgument(args, "--metaConfig", info.getMetaConfig());
+            addArgument(args, "--validConfig", info.getValidConfig());
             addArgument(args, "--plugins", materializePlugins(dbFile).map(Path::toString).orElse(""));
             addArgument(args, "--defaultSrsCode", info.getDefaultSrsCode() > 0 ? Integer.toString(info.getDefaultSrsCode()) : null);
             addArgument(args, "--dataset", info.getDataset());
+            addArgument(args, "--topics", String.join(";", info.getTopicsList()));
+            addArgument(args, "--baskets", String.join(";", info.getBasketsList()));
+            addArgument(args, "--exportModels", String.join(";", info.getExportModelsList()));
 
             ProcessingFile logFile = files.create(Ili2gpkgFileType.LOG_FILE, "log", "txt");
             addArgument(args, "--log", logFile.filePath().toAbsolutePath().toString());
+
+            ProcessingFile xtfLogFile = files.create(Ili2gpkgFileType.XTF_LOG_FILE, "log", "xtf");
+            addArgument(args, "--xtflog", xtfLogFile.filePath().toAbsolutePath().toString());
 
             addFlag(args, "--disableValidation", info.getDisableValidation());
             addFlag(args, "--createBasketCol", info.getCreateBasketCol());
@@ -426,6 +454,20 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             addFlag(args, "--skipGeometryErrors", info.getSkipGeometryErrors());
             addFlag(args, "--importTid", info.getImportTid());
             addFlag(args, "--strokeArcs", info.getStrokeArcs());
+            addFlag(args, "--createFk", info.getCreateFk());
+            addFlag(args, "--createGeomIdx", info.getCreateGeomIdx());
+            addFlag(args, "--createEnumTabs", info.getCreateEnumTabs());
+            addFlag(args, "--createTidCol", info.getCreateTidCol());
+            addFlag(args, "--beautifyEnumDispName", info.getBeautifyEnumDispName());
+            addFlag(args, "--smart1Inheritance", info.getSmart1Inheritance());
+            addFlag(args, "--smart2Inheritance", info.getSmart2Inheritance());
+            addFlag(args, "--sqlColsAsText", info.getSqlColsAsText());
+            addFlag(args, "--doSchemaImport", info.getDoSchemaImport());
+            addFlag(args, "--deleteData", info.getDeleteData());
+            addFlag(args, "--skipPolygonBuilding", info.getSkipPolygonBuilding());
+            addFlag(args, "--importBid", info.getImportBid());
+            addFlag(args, "--disableAreaValidation", info.getDisableAreaValidation());
+            addFlag(args, "--forceTypeValidation", info.getForceTypeValidation());
 
             if (!subjects.isEmpty()) {
                 String subject = subjects.stream()
@@ -433,7 +475,17 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
                         .collect(Collectors.joining(";"));
                 args.add(subject);
             }
-            return Optional.of(new ProcessingArguments(outputFileType, returnOutputOnError, args));
+            return new ProcessingArguments(outputFileType, args);
+        }
+
+        private String getTransferFileExtension() {
+            return switch (Objects.requireNonNull(info).getTransferFormat()) {
+                case TRANSFER_FORMAT_XTF -> "xtf";
+                case TRANSFER_FORMAT_ITF -> "itf";
+                case TRANSFER_FORMAT_GML, TRANSFER_FORMAT_GML_2_0 -> "gml";
+                // onInfo already rejects UNRECOGNIZED, so this cannot be reached by a request.
+                default -> throw new IllegalStateException("Unsupported transfer format: " + info.getTransferFormat());
+            };
         }
 
         private static void addFlag(List<String> args, String flag, boolean enabled) {
@@ -497,7 +549,8 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             try {
                 responseObserver.onNext(createStatusResponse(success));
                 returnFile(responseObserver, Ili2gpkgFileType.LOG_FILE);
-                if (success || processingArguments.returnOutputOnError()) {
+                returnFile(responseObserver, Ili2gpkgFileType.XTF_LOG_FILE);
+                if (success && processingArguments.outputFileType() != null) {
                     returnFile(responseObserver, processingArguments.outputFileType());
                 }
                 responseObserver.onCompleted();

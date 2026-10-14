@@ -92,6 +92,17 @@ public final class ModelDirValidator {
         validateIlidataReference(refMapping, "Ref mapping");
     }
 
+    /**
+     * Validates the validation configuration reference of a request in the same form as {@link #validateMetaConfig}.
+     * A file path would point the tool at server side files.
+     *
+     * @param validConfig the reference to validate, empty if no validation configuration was requested
+     * @throws IllegalArgumentException if the reference is not of the form {@code ilidata:<DatasetId>}
+     */
+    public static void validateValidConfig(String validConfig) {
+        validateIlidataReference(validConfig, "Valid config");
+    }
+
     private static void validateIlidataReference(String reference, String optionName) {
         if (reference.isEmpty()) {
             return;

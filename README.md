@@ -68,7 +68,7 @@ Alles andere wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengen
 
 Ein URL-Eintrag ist damit per Definition ein öffentlich erreichbares Repository. Nicht publizierte Repositories werden stattdessen im Request mitgesendet oder vom Deployment angeboten.
 
-`metaConfig` unterstützt bewusst nur die Form `ilidata:<DatasetId>`: Profile sind über die `ilidata.xml` des Repositorys indexiert, eine Datei-Form wird nicht angeboten.
+`metaConfig` unterstützt bewusst nur die Form `ilidata:<DatasetId>`: Profile sind über die `ilidata.xml` des Repositorys indexiert, eine Datei-Form wird nicht angeboten. Dasselbe gilt für `validConfig` des `Ili2gpkgService`.
 
 ### Repository im Request mitsenden
 
@@ -167,17 +167,22 @@ Die Operation in der `info`-Nachricht bestimmt, welche Eingabedateien erwartet u
 
 | Operation | Beschreibung | Benötigte Eingabedateien | Ausgabedatei |
 | --- | --- | --- | --- |
-| `OPERATION_SCHEMA_IMPORT` | Erzeugt das GeoPackage-Schema aus einem INTERLIS-Modell | `MODEL_FILE` (`.ili`) | `DB_FILE` (`.gpkg`) |
-| `OPERATION_IMPORT` | Importiert eine Transferdatei in ein bestehendes GeoPackage | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
-| `OPERATION_EXPORT` | Exportiert ein GeoPackage in eine Transferdatei | `DB_FILE` (`.gpkg`) | `TRANSFER_FILE` (`.xtf`) |
-| `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
-| `OPERATION_VALIDATE` | Validiert die Daten in einem GeoPackage | `DB_FILE` (`.gpkg`) | `XTF_LOG_FILE` (`.xtf`) |
+| `OPERATION_SCHEMA_IMPORT` | Erzeugt das GeoPackage-Schema aus einem INTERLIS-Modell. Mit einem mitgesendeten `DB_FILE` wird das bestehende Schema ergänzt | `MODEL_FILE` (`.ili`), optional `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
+| `OPERATION_IMPORT` | Importiert eine Transferdatei in ein GeoPackage. Mit `doSchemaImport` ist das `DB_FILE` optional, das GeoPackage-Schema wird dann wie beim Schema-Import erstellt | `TRANSFER_FILE` (`.xtf` oder `.itf`), `DB_FILE` (`.gpkg`, optional mit `doSchemaImport`) | `DB_FILE` (`.gpkg`) |
+| `OPERATION_EXPORT` | Exportiert ein GeoPackage in eine Transferdatei | `DB_FILE` (`.gpkg`) | `TRANSFER_FILE` (`.xtf`, `.itf` oder `.gml`) |
+| `OPERATION_UPDATE` | Aktualisiert die Daten in einem bestehenden GeoPackage aus der Transferdatei | `TRANSFER_FILE` (`.xtf` oder `.itf`), `DB_FILE` (`.gpkg`) | `DB_FILE` (`.gpkg`) |
+| `OPERATION_VALIDATE` | Validiert die Daten in einem GeoPackage | `DB_FILE` (`.gpkg`) | Keine zusätzliche Datei |
+
+Das Format der Datei(en) vom Typ `TRANSFER_FILE` ergibt sich aus der Option `transferFormat`.
 
 Bei allen Operationen stehen zusätzlich die Felder `modelDirs` und `metaConfig` sowie der optionale Dateityp `REPOSITORY_ARCHIVE` zur Verfügung, siehe [Modell-Repositories und Profile](#modell-repositories-und-profile). Zusatzfunktionen aus Plugins lassen sich über `pluginIds` zuschalten, siehe [Plugins zuschalten](#plugins-zuschalten); ili2gpkg kann mit `OPERATION_VALIDATE` ebenfalls validieren und nimmt dieselbe Tool-Option.
 
 | Feld | Beschreibung |
 | --- | --- |
 | `toolVersion` | Version des Werkzeugs für diesen Request. Leer bedeutet die Voreinstellung des Deployments (siehe [Werkzeug-Version wählen](#werkzeug-version-wählen)). Eine Version, die das Deployment nicht anbietet, wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen wird. |
+| `transferFormat` | Wählt das Transfer-Format für die Import, Update und Export-Operationen. Mögliche Optionen sind `XTF` (Standard), `ITF`, `GML` oder `GML_2_0`, die beiden GML-Formate werden nur beim Export unterstützt. |
+
+Die weiteren Felder entsprechen jeweils der gleichnamigen [ili2gpkg-Option](https://github.com/claeis/ili2db/blob/master/docs/ili2db.rst#referenz).
 
 ### Ablauf der Antwort
 
@@ -185,8 +190,8 @@ Nachdem der Anfrage-Stream abgeschlossen ist, werden die Daten verarbeitet.
 Nach der Verarbeitung antwortet der Server mit `ConvertResponse`-Nachrichten in folgender Reihenfolge:
 
 1. Ein `StatusUpdate`, das angibt, ob die Verarbeitung erfolgreich war.
-2. Die Log-Datei des ili2gpkg-Prozesses, aufgeteilt in `fileStart` und einen oder mehrere `chunk`s.
-3. Bei Erfolg wird zusätzlich die Ausgabedatei der Operation gesendet, ebenfalls aufgeteilt in `fileStart` und `chunk`s. Bei `OPERATION_VALIDATE` wird das `XTF_LOG_FILE` auch im Fehlerfall gesendet, da es die gemeldeten Validierungsfehler enthält.
+2. Die Log-Datei und XTF-Log-Datei des ili2gpkg-Prozesses, jeweils aufgeteilt in `fileStart` und einen oder mehrere `chunk`s.
+3. Bei Erfolg wird zusätzlich die Ausgabedatei der Operation gesendet, ebenfalls aufgeteilt in `fileStart` und `chunk`s.
 
 ## Ilivalidator service
 

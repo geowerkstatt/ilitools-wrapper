@@ -1,6 +1,5 @@
-package ch.geowerkstatt.ilitoolswrapper.ilivalidator;
+package ch.geowerkstatt.ilitoolswrapper;
 
-import ch.geowerkstatt.ilitoolswrapper.IntegrationTestSupport;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -12,14 +11,14 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Serves the model repository fixture from {@code ilivalidator/repository} over HTTP on localhost, so the
+ * Serves the model repository fixture from {@code repositories/repository/} over HTTP on localhost, so the
  * integration tests can exercise the URL route of {@code modelDirs} without reaching a remote repository.
  *
  * <p>The server binds an ephemeral port, which also keeps the INTERLIS model cache from reusing entries of an
  * earlier run. Requested paths are recorded so a test can assert which repository files the tool actually read.
  */
-final class LocalRepositoryServer implements AutoCloseable {
-    private static final String RESOURCE_DIRECTORY = "ilivalidator/repository/";
+public final class LocalRepositoryServer implements AutoCloseable {
+    private static final String RESOURCE_DIRECTORY = "repositories/repository/";
 
     private final HttpServer server;
     private final ConcurrentLinkedQueue<String> requestedPaths = new ConcurrentLinkedQueue<>();
@@ -30,15 +29,15 @@ final class LocalRepositoryServer implements AutoCloseable {
         this.servedFiles = servedFiles;
     }
 
-    static LocalRepositoryServer start() throws IOException {
+    public static LocalRepositoryServer start() throws IOException {
         return start(Set.of("ilidata.xml", "test_profile.toml"));
     }
 
-    static LocalRepositoryServer startWithModels() throws IOException {
+    public static LocalRepositoryServer startWithModels() throws IOException {
         return start(Set.of("ilidata.xml", "test_profile.toml", "ilimodels.xml", "model.ili"));
     }
 
-    static LocalRepositoryServer startWithReferenceData() throws IOException {
+    public static LocalRepositoryServer startWithReferenceData() throws IOException {
         return start(Set.of("ilidata.xml", "refmapping.xtf", "refdata_449.xtf"));
     }
 
@@ -50,11 +49,11 @@ final class LocalRepositoryServer implements AutoCloseable {
         return repository;
     }
 
-    String baseUrl() {
+    public String baseUrl() {
         return "http://localhost:" + server.getAddress().getPort() + "/";
     }
 
-    List<String> requestedPaths() {
+    public List<String> requestedPaths() {
         return List.copyOf(requestedPaths);
     }
 

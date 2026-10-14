@@ -9,6 +9,7 @@ import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertOperation;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequest;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertRequestInfo;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.ConvertResponse;
+import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.TransferFormat;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileStart;
 import ch.geowerkstatt.ilitoolswrapper.proto.ili2gpkg.Ili2gpkgFileType;
 import ch.geowerkstatt.ilitoolswrapper.runner.IlitoolsRunner;
@@ -64,7 +65,7 @@ public final class Ili2gpkgServiceTest {
         assertArrayEquals("data".getBytes(StandardCharsets.UTF_8), created.contents());
         assertTrue(created.isClosed(), "File should be closed once the request completes.");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -80,19 +81,19 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        assertEquals(3, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
+        assertEquals(4, fileManager.createdFiles().size(), "File manager should create uploaded and output files");
 
         assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), created.contents());
         assertTrue(created.isClosed(), "File should be closed once the request completes.");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
     void convertHandlesMultipleFiles() {
         StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
 
-        requestObserver.onNext(info());
+        requestObserver.onNext(info(ConvertOperation.OPERATION_IMPORT));
         requestObserver.onNext(fileStart(Ili2gpkgFileType.TRANSFER_FILE));
         requestObserver.onNext(chunk("<TRANSFER>"));
         requestObserver.onNext(chunk("</TRANSFER>"));
@@ -102,9 +103,9 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onNext(chunk("<TRANSFER/>"));
         InMemoryProcessingFile xtfFile2 = fileManager.lastCreatedFile();
 
-        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
         requestObserver.onNext(chunk("Hello World"));
-        InMemoryProcessingFile txtFile = fileManager.lastCreatedFile();
+        InMemoryProcessingFile dbFile = fileManager.lastCreatedFile();
 
         requestObserver.onCompleted();
 
@@ -117,10 +118,10 @@ public final class Ili2gpkgServiceTest {
         assertArrayEquals("<TRANSFER/>".getBytes(StandardCharsets.UTF_8), xtfFile2.contents());
         assertTrue(xtfFile2.isClosed(), "File should be closed once the request completes.");
 
-        assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), txtFile.contents());
-        assertTrue(txtFile.isClosed(), "File should be closed once the request completes.");
+        assertArrayEquals("Hello World".getBytes(StandardCharsets.UTF_8), dbFile.contents());
+        assertTrue(dbFile.isClosed(), "File should be closed once the request completes.");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -162,7 +163,7 @@ public final class Ili2gpkgServiceTest {
         assertTrue(args.contains("--importTid"));
         assertTrue(args.contains("--strokeArcs"));
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -194,7 +195,7 @@ public final class Ili2gpkgServiceTest {
         assertArgumentWithValue(args, "--modeldir", "%ILI_FROM_DB;https://models.interlis.ch/");
         assertFalse(args.contains("--metaConfig"));
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -246,7 +247,7 @@ public final class Ili2gpkgServiceTest {
         assertArgumentWithValue(args, "--modeldir", "%ILI_FROM_DB;%XTF_DIR;https://models.interlis.ch/");
         assertArgumentWithValue(args, "--metaConfig", "ilidata:DEFAULT");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -312,13 +313,47 @@ public final class Ili2gpkgServiceTest {
         assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
     }
 
+    @Test
+    void validatePassesValidConfigAsArgument() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_VALIDATE)
+                        .setValidConfig("ilidata:ch.geow.validconfig"))
+                .build());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertArgumentWithValue(arguments.args(), "--validConfig", "ilidata:ch.geow.validconfig");
+    }
+
+    @Test
+    void validConfigFilePathIsRejected() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_VALIDATE)
+                        .setValidConfig("/app/processing/other-session/config.toml"))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
+    }
+
     public static Stream<Arguments> expectedFileTypeProvider() {
         return Stream.of(
                 Arguments.of(ConvertOperation.OPERATION_SCHEMA_IMPORT, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.MODEL_FILE)),
                 Arguments.of(ConvertOperation.OPERATION_IMPORT, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.TRANSFER_FILE, Ili2gpkgFileType.DB_FILE)),
                 Arguments.of(ConvertOperation.OPERATION_EXPORT, Ili2gpkgFileType.TRANSFER_FILE, List.of(Ili2gpkgFileType.DB_FILE)),
                 Arguments.of(ConvertOperation.OPERATION_UPDATE, Ili2gpkgFileType.DB_FILE, List.of(Ili2gpkgFileType.TRANSFER_FILE, Ili2gpkgFileType.DB_FILE)),
-                Arguments.of(ConvertOperation.OPERATION_VALIDATE, Ili2gpkgFileType.XTF_LOG_FILE, List.of(Ili2gpkgFileType.DB_FILE))
+                Arguments.of(ConvertOperation.OPERATION_VALIDATE, null, List.of(Ili2gpkgFileType.DB_FILE))
         );
     }
 
@@ -339,7 +374,10 @@ public final class Ili2gpkgServiceTest {
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, resultType);
+        var expectedFileTypes = resultType == null
+                ? new Ili2gpkgFileType[]{Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE}
+                : new Ili2gpkgFileType[]{Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, resultType};
+        assertHasResponses(true, expectedFileTypes);
     }
 
     @Test
@@ -355,6 +393,169 @@ public final class Ili2gpkgServiceTest {
         assertNotNull(responseObserver.error());
         assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
         assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run when a required file is missing.");
+    }
+
+    public static Stream<Arguments> multipleDbFilesProvider() {
+        return Stream.of(
+                Arguments.of(ConvertOperation.OPERATION_SCHEMA_IMPORT, false, List.of(Ili2gpkgFileType.MODEL_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_IMPORT, false, List.of(Ili2gpkgFileType.TRANSFER_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_IMPORT, true, List.of(Ili2gpkgFileType.TRANSFER_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_EXPORT, false, List.of()),
+                Arguments.of(ConvertOperation.OPERATION_UPDATE, false, List.of(Ili2gpkgFileType.TRANSFER_FILE)),
+                Arguments.of(ConvertOperation.OPERATION_VALIDATE, false, List.of())
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("multipleDbFilesProvider")
+    void operationWithMultipleDbFilesIsRejected(ConvertOperation operation, boolean doSchemaImport, List<Ili2gpkgFileType> otherInputFiles) {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(operation)
+                        .setDoSchemaImport(doSchemaImport))
+                .build());
+        for (Ili2gpkgFileType inputFile : otherInputFiles) {
+            requestObserver.onNext(fileStart(inputFile));
+            requestObserver.onNext(chunk("data"));
+        }
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("first db"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("second db"));
+        requestObserver.onCompleted();
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run when the database file is ambiguous.");
+    }
+
+    @Test
+    void schemaImportAllowsExistingDatabase() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(info(ConvertOperation.OPERATION_SCHEMA_IMPORT));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.MODEL_FILE));
+        requestObserver.onNext(chunk("model file"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("db file"));
+        InMemoryProcessingFile uploadedDb = fileManager.lastCreatedFile();
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, arguments.tool());
+        assertArgumentWithValue(arguments.args(), "--dbfile", uploadedDb.filePath().toAbsolutePath().toString());
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
+    }
+
+    public static Stream<Arguments> importTransferFormatProvider() {
+        return Stream.of(
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_XTF, ".xtf"),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_ITF, ".itf")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("importTransferFormatProvider")
+    void importUsesTransferFileOfRequestedFormat(TransferFormat transferFormat, String expectedExtension) {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_IMPORT)
+                        .setTransferFormat(transferFormat))
+                .build());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.TRANSFER_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("db"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        // ili2gpkg picks the import format from the extension of the transfer file, the last argument.
+        String transferFile = arguments.args().getLast();
+        assertTrue(transferFile.endsWith(expectedExtension), "Unexpected transfer file: " + transferFile);
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
+    }
+
+    public static Stream<Arguments> importRejectedTransferFormatProvider() {
+        return Stream.of(
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML_2_0)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("importRejectedTransferFormatProvider")
+    void importRejectsUnsupportedTransferFormat(TransferFormat transferFormat) {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_IMPORT)
+                        .setTransferFormat(transferFormat))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNull(arguments, "The runner should not have been invoked.");
+    }
+
+    public static Stream<Arguments> exportTransferFormatProvider() {
+        return Stream.of(
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_XTF, ".xtf", false),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_ITF, ".itf", false),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML, ".gml", false),
+                Arguments.of(TransferFormat.TRANSFER_FORMAT_GML_2_0, ".gml", true)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("exportTransferFormatProvider")
+    void exportWritesTransferFileOfRequestedFormat(TransferFormat transferFormat, String expectedExtension, boolean expectedIliGml20) {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_EXPORT)
+                        .setTransferFormat(transferFormat))
+                .build());
+        requestObserver.onNext(fileStart(Ili2gpkgFileType.DB_FILE));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        // ili2gpkg picks the export format from the extension of the transfer file, the last argument.
+        String transferFile = arguments.args().getLast();
+        assertTrue(transferFile.endsWith(expectedExtension), "Unexpected transfer file: " + transferFile);
+        assertEquals(expectedIliGml20, arguments.args().contains("--ILIGML20"), expectedIliGml20 ? "Missing --ILIGML20 argument." : "Unexpected --ILIGML20 argument.");
+
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.TRANSFER_FILE);
+    }
+
+    @Test
+    void unrecognizedTransferFormatIsRejected() {
+        StreamObserver<ConvertRequest> requestObserver = service.convert(responseObserver);
+
+        requestObserver.onNext(ConvertRequest.newBuilder()
+                .setInfo(ConvertRequestInfo.newBuilder()
+                        .setOperation(ConvertOperation.OPERATION_EXPORT)
+                        .setTransferFormatValue(99))
+                .build());
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        assertNull(ilitoolsRunner.lastArguments(), "ili2gpkg should not run for a rejected request.");
     }
 
     @Test
@@ -471,7 +672,7 @@ public final class Ili2gpkgServiceTest {
         requestObserver.onCompleted();
 
         assertNull(responseObserver.error());
-        assertHasResponses(false, Ili2gpkgFileType.LOG_FILE);
+        assertHasResponses(false, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE);
     }
 
     @Test
@@ -576,7 +777,7 @@ public final class Ili2gpkgServiceTest {
         assertFalse(arguments.args().contains("5.4.0"), "The version must not appear in the CLI arguments.");
         assertEquals(IlitoolsRunnerMock.Tool.ILI2GPKG, ilitoolsRunner.versionsQueriedFor(), "The service must consult its own tool's versions.");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test
@@ -593,7 +794,7 @@ public final class Ili2gpkgServiceTest {
         assertNotNull(arguments, "The runner should have been invoked.");
         assertEquals("", arguments.toolVersion(), "Without a selection the deployment default must run.");
 
-        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.DB_FILE);
+        assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);
     }
 
     @Test

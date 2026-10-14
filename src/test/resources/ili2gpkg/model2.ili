@@ -1,0 +1,16 @@
+INTERLIS 2.4;
+
+MODEL SimpleModel2
+  AT "mailto:info@geowerkstatt.ch"
+  VERSION "2026-10-08" =
+
+  TOPIC Testdata =
+    OID AS INTERLIS.UUIDOID;
+
+    CLASS Model2ClassA =
+      Name: MANDATORY TEXT*8;
+    END Model2ClassA;
+
+  END Testdata;
+
+END SimpleModel2.
