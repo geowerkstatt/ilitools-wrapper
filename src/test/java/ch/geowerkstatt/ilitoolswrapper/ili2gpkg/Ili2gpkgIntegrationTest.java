@@ -262,6 +262,30 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
     }
 
     @Test
+    public void testImportItf() throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        // ITF requires an INTERLIS 1 model, which is already imported in this database.
+        call.write(info(ConvertOperation.OPERATION_IMPORT, info -> info
+                .setTransferFormat(TransferFormat.TRANSFER_FORMAT_ITF)
+                .setDeleteData(true)));
+        writeResourceFile(call, Ili2gpkgFileType.DB_FILE, "ili2gpkg/data_interlis1.gpkg");
+        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ilivalidator/transfer_interlis1.itf");
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_import_itf.gpkg");
+        assertTrue(response.success, "ITF import failed. Log:\n" + response.log);
+        assertNotEquals("", response.log, "Log is empty");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
+
+        try (var connection = new GpkgConnection(response.requireOutputFilePath())) {
+            connection.assertData("tablea", "T_Id", List.of(Map.of("aname", "Alpha")));
+            connection.assertData("tableb", "T_Id", List.of(Map.of("aname", "Beta")));
+        }
+    }
+
+    @Test
     public void testImportFailsWithInvalidData() throws Exception {
         var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
         var call = client.convert();
