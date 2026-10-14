@@ -11,14 +11,14 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Serves the model repository fixture from {@code repository/} over HTTP on localhost, so the integration tests
- * can exercise the URL route of {@code modelDirs} without reaching a remote repository.
+ * Serves the model repository fixture from {@code repositories/repository/} over HTTP on localhost, so the
+ * integration tests can exercise the URL route of {@code modelDirs} without reaching a remote repository.
  *
  * <p>The server binds an ephemeral port, which also keeps the INTERLIS model cache from reusing entries of an
  * earlier run. Requested paths are recorded so a test can assert which repository files the tool actually read.
  */
 public final class LocalRepositoryServer implements AutoCloseable {
-    private static final String RESOURCE_DIRECTORY = "repository/";
+    private static final String RESOURCE_DIRECTORY = "repositories/repository/";
 
     private final HttpServer server;
     private final ConcurrentLinkedQueue<String> requestedPaths = new ConcurrentLinkedQueue<>();
