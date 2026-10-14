@@ -110,6 +110,16 @@ public final class XtfDiffServiceTest {
     }
 
     @Test
+    void diffAsksForTheLocationsOfTheChanges() {
+        sendBothTransferFiles(info());
+
+        assertNull(responseObserver.error());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertTrue(arguments.args().contains("--locations"), "The tool should write the location of each change, but the arguments were " + arguments.args());
+    }
+
+    @Test
     void diffFallsBackToTheOfficialRepository() {
         sendBothTransferFiles(info());
 

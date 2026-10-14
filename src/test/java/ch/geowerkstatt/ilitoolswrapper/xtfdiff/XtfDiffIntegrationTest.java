@@ -81,6 +81,16 @@ public final class XtfDiffIntegrationTest extends IlitoolsIntegrationTestBase {
     }
 
     @Test
+    public void testDiffLocatesTheChanges() throws Exception {
+        DiffResult result = diff(FIRST_STATE, SECOND_STATE, "locations.json");
+
+        assertTrue(result.success, "The diff should have succeeded. Log:\n" + result.log);
+        // The test data change geometries, so their changes carry a location as a simple feature.
+        Pattern location = Pattern.compile("\"(old|new)Location\"\\s*:\\s*\"(POINT|LINESTRING|POLYGON|MULTIPOINT|MULTILINESTRING|MULTIPOLYGON|GEOMETRYCOLLECTION) \\(");
+        assertTrue(location.matcher(result.diff).find(), "The diff should locate the changes. Diff:\n" + result.diff);
+    }
+
+    @Test
     public void testDiffOfDifferentInterlisVersionsReturnsTheLogAlone() throws Exception {
         DiffResult result = diff(FIRST_STATE_INTERLIS_2_3, SECOND_STATE, "different_versions.json");
 

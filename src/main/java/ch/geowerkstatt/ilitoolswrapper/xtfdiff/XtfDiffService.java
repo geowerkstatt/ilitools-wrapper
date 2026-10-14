@@ -276,7 +276,8 @@ public final class XtfDiffService extends XtfDiffServiceGrpc.XtfDiffServiceImplB
         }
 
         // One old and one new state are what make a diff request runnable. The tool takes them in that order, followed
-        // by the file it writes the changes to.
+        // by the file it writes the changes to. Every diff carries the location of each change, so that a client can
+        // show the changes on a map.
         private Optional<List<String>> diffRequestToArguments() {
             Optional<ProcessingFile> oldFile = files.getSingle(XtfDiffFileType.OLD_TRANSFER_FILE);
             Optional<ProcessingFile> newFile = files.getSingle(XtfDiffFileType.NEW_TRANSFER_FILE);
@@ -289,6 +290,7 @@ public final class XtfDiffService extends XtfDiffServiceGrpc.XtfDiffServiceImplB
             return Optional.of(List.of(
                     "--logfile", absolutePath(logFile),
                     "--modeldir", modelDirArgument,
+                    "--locations",
                     absolutePath(oldFile.get()),
                     absolutePath(newFile.get()),
                     absolutePath(diffFile)));
