@@ -56,7 +56,7 @@ Erlaubte Einträge:
 - `http(s)`-URLs auf INTERLIS-Modell-Repositories
 - die Platzhalter des jeweiligen Tools, die erst das Tool selbst expandiert, jeweils exakt oder mit einem relativen Unterpfad (etwa `%ITF_DIR/models`):
     - `%ITF_DIR` (`IlivalidatorService`): das Verzeichnis der Transferdatei, also das Session-Verzeichnis des Aufrufs. Mitgesendete Dateien liegen in eigenen Unterordnern: Modell-Dateien in `%ITF_DIR/models`, das entpackte Repository-Archiv in `%ITF_DIR/repository` (siehe die beiden folgenden Abschnitte).
-    - `%XTF_DIR` (`Ili2gpkgService`): dasselbe Verzeichnis, mit denselben Unterordnern (`%XTF_DIR/models`, `%XTF_DIR/repository`).
+    - `%XTF_DIR` (`Ili2gpkgService`): dasselbe Verzeichnis, mit denselben Unterordnern (`%XTF_DIR/models`, `%XTF_DIR/repository`). Abweichend von den übrigen Platzhaltern ersetzt der Wrapper `%XTF_DIR` selbst durch das Session-Verzeichnis, weil ili2gpkg selbst keine Unterverzeichnisse zulässt.
     - `%ILI_FROM_DB` (`Ili2gpkgService`): das im GeoPackage selbst abgelegte Modell. Nötig, sobald `modelDirs` gesetzt ist, weil dieser Eintrag sonst mit dem Tool-Default verloren geht.
 - `%REPOSITORIES/<id>` (`IlivalidatorService` und `XtfDiffService`): ein Repository, das das Deployment anbietet. Diesen Platzhalter kennt das Tool nicht, der Wrapper ersetzt ihn durch das Verzeichnis des Repositorys (siehe [Angebotene Repositories](#angebotene-repositories)).
 

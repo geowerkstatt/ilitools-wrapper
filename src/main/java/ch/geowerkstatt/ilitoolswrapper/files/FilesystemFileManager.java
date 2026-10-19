@@ -24,7 +24,7 @@ public final class FilesystemFileManager implements FileManager {
 
     @Override
     public void setupProcessingDirectory(String folderName, List<String> subfolders) throws IOException {
-        Path path = basePath.resolve(folderName);
+        Path path = processingDirectory(folderName);
 
         // Set up the folder structure for the processing directory, so it can be used by the modeldir placeholders
         // regardless of files actually sent.
@@ -35,16 +35,21 @@ public final class FilesystemFileManager implements FileManager {
     }
 
     @Override
+    public Path processingDirectory(String folderName) {
+        return basePath.resolve(folderName).toAbsolutePath();
+    }
+
+    @Override
     public ProcessingFile createProcessingFile(String folderName, String fileName, String fileExtension) {
         checkFileExtension(fileExtension);
 
-        Path filePath = basePath.resolve(folderName, fileName + "." + fileExtension);
+        Path filePath = processingDirectory(folderName).resolve(fileName + "." + fileExtension);
         return new FilesystemProcessingFile(filePath);
     }
 
     @Override
     public void deleteProcessingFiles(String folderName) throws IOException {
-        Path path = basePath.resolve(folderName);
+        Path path = processingDirectory(folderName);
         Files.walkFileTree(path, new DeleteFileVisitor());
     }
 

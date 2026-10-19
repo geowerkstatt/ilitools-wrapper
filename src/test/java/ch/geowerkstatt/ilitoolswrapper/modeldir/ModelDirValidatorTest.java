@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -15,8 +16,10 @@ import static org.junit.jupiter.api.Assertions.*;
 public final class ModelDirValidatorTest {
     private static final Set<String> ILIVALIDATOR_PLACEHOLDERS = Set.of("%ITF_DIR");
     private static final List<String> ILIVALIDATOR_MODEL_DIRS = List.of("https://models.interlis.ch/");
-    private static final Set<String> ILI2GPKG_PLACEHOLDERS = Set.of("%XTF_DIR", "%ILI_FROM_DB");
+    private static final Set<String> ILI2GPKG_PLACEHOLDERS = Set.of("%ILI_FROM_DB");
     private static final List<String> ILI2GPKG_MODEL_DIRS = List.of("%ILI_FROM_DB", "https://models.interlis.ch/");
+    private static final Path SESSION_DIRECTORY = Path.of("session-dir").toAbsolutePath();
+    private static final Map<String, Path> ILI2GPKG_FOLDER_REPLACEMENTS = Map.of("%XTF_DIR", SESSION_DIRECTORY);
 
     @TempDir
     private Path repositoryRoot;
@@ -44,7 +47,7 @@ public final class ModelDirValidatorTest {
 
     @Test
     void ili2gpkgAcceptsItsOwnPlaceholders() {
-        assertEquals("%ILI_FROM_DB;%XTF_DIR", ili2gpkg().validateAndJoin(List.of("%ILI_FROM_DB", "%XTF_DIR")));
+        assertEquals("%ILI_FROM_DB;" + SESSION_DIRECTORY, ili2gpkg().validateAndJoin(List.of("%ILI_FROM_DB", "%XTF_DIR")));
     }
 
     @Test
@@ -56,7 +59,13 @@ public final class ModelDirValidatorTest {
     @Test
     void placeholderWithSubpathIsAccepted() {
         assertEquals("%ITF_DIR/repository;%ITF_DIR/models", ilivalidator().validateAndJoin(List.of("%ITF_DIR/repository", "%ITF_DIR/models")));
-        assertEquals("%XTF_DIR/repository/sub", ili2gpkg().validateAndJoin(List.of("%XTF_DIR/repository/sub")));
+    }
+
+    @Test
+    void sessionPlaceholderIsReplacedWithSessionDirectory() {
+        assertEquals(
+                SESSION_DIRECTORY + ";" + SESSION_DIRECTORY.resolve("repository/sub"),
+                ili2gpkg().validateAndJoin(List.of("%XTF_DIR", "%XTF_DIR/repository/sub")));
     }
 
     @Test
@@ -112,6 +121,17 @@ public final class ModelDirValidatorTest {
     @Test
     void subpathWithBackslashIsRejected() {
         assertRejected(ilivalidator(), "%ITF_DIR/models\\sub");
+    }
+
+    @Test
+    void sessionPlaceholderSubpathLeavingTheSessionIsRejected() {
+        assertRejected(ili2gpkg(), "%XTF_DIR/../other-session");
+        assertRejected(ili2gpkg(), "%XTF_DIR/repository/../../escape");
+        assertRejected(ili2gpkg(), "%XTF_DIR/./models");
+        assertRejected(ili2gpkg(), "%XTF_DIR/");
+        assertRejected(ili2gpkg(), "%XTF_DIR//models");
+        assertRejected(ili2gpkg(), "%XTF_DIR/models\\..\\..\\escape");
+        assertRejected(ili2gpkg(), "%XTF_DIR/D:escape");
     }
 
     @Test
@@ -235,19 +255,19 @@ public final class ModelDirValidatorTest {
     }
 
     private static ModelDirValidator ilivalidator() {
-        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, new RepositoryCatalog(null), PrivateNetworkPolicy.ALLOW, ILIVALIDATOR_MODEL_DIRS);
+        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, Map.of(), new RepositoryCatalog(null), PrivateNetworkPolicy.ALLOW, ILIVALIDATOR_MODEL_DIRS);
     }
 
     private static ModelDirValidator ilivalidatorOffering(Path repositoryRoot) {
-        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, new RepositoryCatalog(repositoryRoot), PrivateNetworkPolicy.ALLOW, ILIVALIDATOR_MODEL_DIRS);
+        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, Map.of(), new RepositoryCatalog(repositoryRoot), PrivateNetworkPolicy.ALLOW, ILIVALIDATOR_MODEL_DIRS);
     }
 
     private static ModelDirValidator ili2gpkg() {
-        return new ModelDirValidator(ILI2GPKG_PLACEHOLDERS, null, PrivateNetworkPolicy.ALLOW, ILI2GPKG_MODEL_DIRS);
+        return new ModelDirValidator(ILI2GPKG_PLACEHOLDERS, ILI2GPKG_FOLDER_REPLACEMENTS, null, PrivateNetworkPolicy.ALLOW, ILI2GPKG_MODEL_DIRS);
     }
 
     private static ModelDirValidator blockingPrivateNetworks() {
-        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, new RepositoryCatalog(null), PrivateNetworkPolicy.BLOCK, ILIVALIDATOR_MODEL_DIRS);
+        return new ModelDirValidator(ILIVALIDATOR_PLACEHOLDERS, Map.of(), new RepositoryCatalog(null), PrivateNetworkPolicy.BLOCK, ILIVALIDATOR_MODEL_DIRS);
     }
 
     private static void assertRejected(ModelDirValidator validator, String entry) {

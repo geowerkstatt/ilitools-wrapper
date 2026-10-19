@@ -27,6 +27,7 @@ import org.jspecify.annotations.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -65,7 +66,7 @@ public final class XtfDiffService extends XtfDiffServiceGrpc.XtfDiffServiceImplB
             @Nullable Timeout toolTimeout) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
-        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, repositoryCatalog, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
+        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, Map.of(), repositoryCatalog, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
         this.toolTimeout = toolTimeout;
     }
 

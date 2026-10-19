@@ -32,6 +32,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -44,7 +45,10 @@ import java.util.stream.Collectors;
 public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceImplBase implements ServiceHealthCheck {
     // Setting --modeldir replaces the tool default entirely, so %ILI_FROM_DB has to stay available for
     // operations that read the model from the GeoPackage itself.
-    private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%XTF_DIR", "%ILI_FROM_DB");
+    private static final Set<String> MODEL_DIR_PLACEHOLDERS = Set.of("%ILI_FROM_DB");
+
+    // ili2gpkg does not resolve subfolders of %XTF_DIR, so the wrapper replaces it with the session directory itself.
+    private static final String XTF_DIR_PLACEHOLDER = "%XTF_DIR";
 
     // Session subfolder for received MODEL_FILEs, addressed as %XTF_DIR/models in the model dirs.
     private static final String MODEL_FILES_SUBFOLDER = "models";
@@ -62,7 +66,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     private static final RepositoryArchiveExtractor REPOSITORY_ARCHIVE_EXTRACTOR = new RepositoryArchiveExtractor();
     private final FileManager fileManager;
     private final IlitoolsRunner ilitoolsRunner;
-    private final ModelDirValidator modelDirValidator;
+    private final PrivateNetworkPolicy privateNetworkPolicy;
     private final PluginCatalog pluginCatalog;
     private final @Nullable Timeout toolTimeout;
 
@@ -83,8 +87,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             @Nullable Timeout toolTimeout) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
-        // Offered repositories serve validations so far, so ili2gpkg takes no %REPOSITORIES entries.
-        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, null, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
+        this.privateNetworkPolicy = privateNetworkPolicy;
         this.pluginCatalog = pluginCatalog;
         this.toolTimeout = toolTimeout;
     }
@@ -123,6 +126,10 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
     private final class ConvertObserver implements StreamObserver<ConvertRequest> {
         private final StreamObserver<ConvertResponse> responseObserver;
         private final ProcessingFileSet<Ili2gpkgFileType> files = new ProcessingFileSet<>(fileManager);
+        // Per request, as %XTF_DIR resolves to this request's session directory. Offered repositories serve
+        // validations so far, so ili2gpkg takes no %REPOSITORIES entries.
+        private final ModelDirValidator modelDirValidator = new ModelDirValidator(
+                MODEL_DIR_PLACEHOLDERS, Map.of(XTF_DIR_PLACEHOLDER, files.sessionDirectory()), null, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
         private @Nullable ProcessingFile currentFile;
         private @Nullable ConvertRequestInfo info;
         private @Nullable CompletableFuture<Void> runFuture;
@@ -434,7 +441,7 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
             addArgument(args, "--modeldir", modelDirArgument);
             addArgument(args, "--metaConfig", info.getMetaConfig());
             addArgument(args, "--validConfig", info.getValidConfig());
-            addArgument(args, "--plugins", materializePlugins(dbFile).map(Path::toString).orElse(""));
+            addArgument(args, "--plugins", materializePlugins().map(Path::toString).orElse(""));
             addArgument(args, "--defaultSrsCode", info.getDefaultSrsCode() > 0 ? Integer.toString(info.getDefaultSrsCode()) : null);
             addArgument(args, "--dataset", info.getDataset());
             addArgument(args, "--topics", String.join(";", info.getTopicsList()));
@@ -499,18 +506,13 @@ public final class Ili2gpkgService extends Ili2gpkgServiceGrpc.Ili2gpkgServiceIm
          * selection nothing is created and {@code --plugins} stays unset, which leaves the tool with its own
          * default; that default points into the tool installation, which carries no plugins.
          */
-        private Optional<Path> materializePlugins(ProcessingFile sessionFile) {
+        private Optional<Path> materializePlugins() {
             if (requestedPlugins.isEmpty()) {
                 return Optional.empty();
             }
 
-            Path sessionDirectory = sessionFile.filePath().toAbsolutePath().getParent();
-            if (sessionDirectory == null) {
-                throw new UncheckedIOException(new IOException("The file " + sessionFile.filePath() + " is not inside a session directory."));
-            }
-
             try {
-                return pluginCatalog.materialize(requestedPlugins, sessionDirectory);
+                return pluginCatalog.materialize(requestedPlugins, files.sessionDirectory());
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }

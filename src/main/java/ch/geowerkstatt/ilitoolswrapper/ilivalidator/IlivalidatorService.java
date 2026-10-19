@@ -33,6 +33,7 @@ import java.lang.module.ModuleDescriptor;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -86,7 +87,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             @Nullable Timeout toolTimeout) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
-        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, repositoryCatalog, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
+        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, Map.of(), repositoryCatalog, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
         this.pluginCatalog = pluginCatalog;
         this.toolTimeout = toolTimeout;
     }

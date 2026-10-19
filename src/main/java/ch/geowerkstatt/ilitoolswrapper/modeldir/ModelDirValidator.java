@@ -6,9 +6,11 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -21,14 +23,16 @@ import java.util.stream.Collectors;
  * by a relative subpath below the directory the placeholder expands to (for example the subfolders the wrapper
  * materializes received files into). A local path would give the caller access to server side directories such as
  * the session directory of another request, and an entry containing the join character {@code ;} would expand into
- * several entries. The one exception is an offered repository, {@code %REPOSITORIES/<id>}: the tool does not know
- * that placeholder, so the wrapper replaces it with the directory of the repository.
+ * several entries. Two kinds of entries are replaced by the wrapper instead: an offered repository,
+ * {@code %REPOSITORIES/<id>}, which the tool does not know, becomes the directory of the repository, and a folder
+ * placeholder becomes the folder it was configured with.
  */
 public final class ModelDirValidator {
     private static final String ENTRY_SEPARATOR = ";";
     private static final String ILIDATA_PREFIX = "ilidata:";
 
     private final Set<String> allowedPlaceholders;
+    private final Map<String, Path> folderReplacements;
     private final @Nullable RepositoryCatalog repositoryCatalog;
     private final PrivateNetworkPolicy privateNetworkPolicy;
     private final List<String> defaultModelDirs;
@@ -36,7 +40,10 @@ public final class ModelDirValidator {
     /**
      * Creates a validator for a single tool.
      *
-     * @param allowedPlaceholders the tool placeholders accepted as entries, for example {@code %ITF_DIR}
+     * @param allowedPlaceholders the tool placeholders accepted as entries and left to the tool to expand, for
+     *     example {@code %ITF_DIR}
+     * @param folderReplacements placeholders the wrapper replaces with a folder itself, mapped to that folder; they
+     *     are accepted as entries as well
      * @param repositoryCatalog the repositories this deployment offers to the tool, or {@code null} when the tool
      *     takes no {@code %REPOSITORIES} entries at all
      * @param privateNetworkPolicy whether URLs that resolve into non-public address ranges are accepted
@@ -44,10 +51,12 @@ public final class ModelDirValidator {
      */
     public ModelDirValidator(
             Set<String> allowedPlaceholders,
+            Map<String, Path> folderReplacements,
             @Nullable RepositoryCatalog repositoryCatalog,
             PrivateNetworkPolicy privateNetworkPolicy,
             List<String> defaultModelDirs) {
         this.allowedPlaceholders = Set.copyOf(allowedPlaceholders);
+        this.folderReplacements = Map.copyOf(folderReplacements);
         this.repositoryCatalog = repositoryCatalog;
         this.privateNetworkPolicy = privateNetworkPolicy;
         this.defaultModelDirs = defaultModelDirs;
@@ -57,8 +66,8 @@ public final class ModelDirValidator {
      * Validates every entry and joins them into the value of the tool option {@code --modeldir}.
      *
      * @param modelDirs the requested model repositories, in the order the tool should search them
-     * @return the joined value with offered repositories replaced by their directories, or the default modeldir if no
-     *     repository was requested
+     * @return the joined value with offered repositories and folder placeholders replaced by their folders, or the
+     *     default modeldir if no repository was requested
      * @throws IllegalArgumentException if an entry is neither an allowed placeholder, nor an offered repository, nor
      *     an acceptable {@code http(s)} URL
      */
@@ -129,10 +138,9 @@ public final class ModelDirValidator {
             return repositoryCatalog.resolve(modelDir);
         }
         if (modelDir.startsWith("%")) {
-            validatePlaceholder(modelDir);
-        } else {
-            validateUrl(modelDir);
+            return validatePlaceholder(modelDir);
         }
+        validateUrl(modelDir);
         return modelDir;
     }
 
@@ -140,23 +148,26 @@ public final class ModelDirValidator {
         return modelDir.equals(RepositoryCatalog.PLACEHOLDER) || modelDir.startsWith(RepositoryCatalog.PLACEHOLDER + "/");
     }
 
-    private void validatePlaceholder(String modelDir) {
+    private String validatePlaceholder(String modelDir) {
         int subpathIndex = modelDir.indexOf('/');
         String placeholder = subpathIndex < 0 ? modelDir : modelDir.substring(0, subpathIndex);
-        if (!allowedPlaceholders.contains(placeholder)) {
+        String subpath = subpathIndex < 0 ? "" : modelDir.substring(subpathIndex + 1);
+        Path folder = folderReplacements.get(placeholder);
+        if (folder == null && !allowedPlaceholders.contains(placeholder)) {
             throw new IllegalArgumentException("Model dir entry \"" + modelDir + "\" is not an allowed placeholder, expected one of " + expectedPlaceholders() + ".");
         }
         if (subpathIndex >= 0) {
-            validatePlaceholderSubpath(modelDir, modelDir.substring(subpathIndex + 1));
+            validatePlaceholderSubpath(modelDir, subpath);
         }
+        return folder == null ? modelDir : folder.resolve(subpath).toString();
     }
 
     private Set<String> expectedPlaceholders() {
-        if (repositoryCatalog == null) {
-            return allowedPlaceholders;
-        }
         Set<String> expected = new TreeSet<>(allowedPlaceholders);
-        expected.add(RepositoryCatalog.PLACEHOLDER + "/<id>");
+        expected.addAll(folderReplacements.keySet());
+        if (repositoryCatalog != null) {
+            expected.add(RepositoryCatalog.PLACEHOLDER + "/<id>");
+        }
         return expected;
     }
 
@@ -164,10 +175,10 @@ public final class ModelDirValidator {
     // segment leaves it. This is what makes the wrapper subfolders (models, repository) addressable as own entries.
     private static void validatePlaceholderSubpath(String modelDir, String subpath) {
         boolean valid = !subpath.isEmpty() && Arrays.stream(subpath.split("/", -1))
-                .allMatch(segment -> !segment.isEmpty() && !segment.equals(".") && !segment.equals("..") && !segment.contains("\\"));
+                .allMatch(segment -> !segment.isEmpty() && !segment.equals(".") && !segment.equals("..") && !segment.contains("\\") && !segment.contains(":"));
         if (!valid) {
             throw new IllegalArgumentException("Model dir entry \"" + modelDir
-                    + "\" must address a subfolder with a relative path: no empty segments, no \".\" or \"..\" and no backslashes.");
+                    + "\" must address a subfolder with a relative path: no empty segments, no \".\" or \"..\" and no backslashes or colons.");
         }
     }
 

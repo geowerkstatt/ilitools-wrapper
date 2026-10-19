@@ -1,6 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -41,6 +42,15 @@ public final class ProcessingFileSet<F extends Enum<F>> {
      */
     public void setupSessionDirectory(List<String> subfolders) throws IOException {
         fileManager.setupProcessingDirectory(sessionId.toString(), subfolders);
+    }
+
+    /**
+     * Returns the absolute path of the session directory all files of this set are created in.
+     *
+     * @return the absolute path of the session directory
+     */
+    public Path sessionDirectory() {
+        return fileManager.processingDirectory(sessionId.toString());
     }
 
     /**
