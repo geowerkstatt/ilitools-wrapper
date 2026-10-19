@@ -225,6 +225,39 @@ public final class Ili2gpkgIntegrationTest extends IlitoolsIntegrationTestBase {
     }
 
     @Test
+    public void testImportWithModelFromRequest() throws Exception {
+        var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.convert();
+
+        // Without a database, the model is referenced by the transfer file.
+        call.write(info(ConvertOperation.OPERATION_IMPORT, info -> info
+                .setDoSchemaImport(true)
+                .setCreateBasketCol(true)
+                .addModelDirs("%XTF_DIR/models")));
+        writeResourceFile(call, Ili2gpkgFileType.TRANSFER_FILE, "ili2gpkg/transfer.xtf");
+        writeResourceFile(call, Ili2gpkgFileType.MODEL_FILE, "ili2gpkg/model.ili");
+        call.halfClose();
+
+        Response response = readResponse(call, Ili2gpkgFileType.DB_FILE, "data_import_with_model_from_request.gpkg");
+        assertTrue(response.success, "Import with model from request failed. Log:\n" + response.log);
+        assertNotEquals("", response.log, "Log is empty");
+        assertNotEquals("", response.xtfLog, "XTF log is empty");
+
+        try (var connection = new GpkgConnection(response.requireOutputFilePath())) {
+            connection.assertHasTable("classa", Set.of("T_Id", "T_Ili_Tid", "aname", "T_basket"));
+            connection.assertHasTable("apoint", Set.of("T_Id", "T_Ili_Tid", "ageometry", "T_basket"));
+
+            connection.assertData("classa", "T_Id", List.of(
+                    Map.of("T_Ili_Tid", "11111111-1111-4111-8111-111111111111", "aname", "Alpha"),
+                    Map.of("T_Ili_Tid", "22222222-2222-4222-8222-222222222222", "aname", "Beta")
+            ));
+            connection.assertData("apoint", "T_Id", List.of(
+                    Map.of("T_Ili_Tid", "33333333-3333-4333-8333-333333333333")
+            ));
+        }
+    }
+
+    @Test
     public void testImportWithMultipleTransferFiles() throws Exception {
         var client = Ili2gpkgServiceGrpc.newBlockingV2Stub(channel);
         var call = client.convert();

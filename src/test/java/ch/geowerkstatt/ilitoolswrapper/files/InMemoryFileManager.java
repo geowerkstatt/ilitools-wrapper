@@ -2,6 +2,7 @@ package ch.geowerkstatt.ilitoolswrapper.files;
 
 import org.jspecify.annotations.Nullable;
 
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -27,6 +28,11 @@ public final class InMemoryFileManager implements FileManager {
         for (String subfolder : subfolders) {
             createdFolders.add(folderName + "/" + subfolder);
         }
+    }
+
+    @Override
+    public Path processingDirectory(String folderName) {
+        return Paths.get(folderName).toAbsolutePath();
     }
 
     @Override

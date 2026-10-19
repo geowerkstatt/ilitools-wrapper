@@ -28,6 +28,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -232,6 +233,7 @@ public final class Ili2gpkgServiceTest {
                         .setOperation(ConvertOperation.OPERATION_SCHEMA_IMPORT)
                         .addModelDirs("%ILI_FROM_DB")
                         .addModelDirs("%XTF_DIR")
+                        .addModelDirs("%XTF_DIR/models")
                         .addModelDirs("https://models.interlis.ch/")
                         .setMetaConfig("ilidata:DEFAULT"))
                 .build());
@@ -243,8 +245,10 @@ public final class Ili2gpkgServiceTest {
         IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
         assertNotNull(arguments, "The runner should have been invoked.");
 
+        // The wrapper resolves %XTF_DIR to the session directory itself, including any subpath.
         List<String> args = arguments.args();
-        assertArgumentWithValue(args, "--modeldir", "%ILI_FROM_DB;%XTF_DIR;https://models.interlis.ch/");
+        Path sessionDirectory = Objects.requireNonNull(fileManager.lastCreatedFile().filePath().toAbsolutePath().getParent());
+        assertArgumentWithValue(args, "--modeldir", "%ILI_FROM_DB;" + sessionDirectory + ";" + sessionDirectory.resolve("models") + ";https://models.interlis.ch/");
         assertArgumentWithValue(args, "--metaConfig", "ilidata:DEFAULT");
 
         assertHasResponses(true, Ili2gpkgFileType.LOG_FILE, Ili2gpkgFileType.XTF_LOG_FILE, Ili2gpkgFileType.DB_FILE);

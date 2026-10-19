@@ -56,7 +56,7 @@ Erlaubte Einträge:
 - `http(s)`-URLs auf INTERLIS-Modell-Repositories
 - die Platzhalter des jeweiligen Tools, die erst das Tool selbst expandiert, jeweils exakt oder mit einem relativen Unterpfad (etwa `%ITF_DIR/models`):
     - `%ITF_DIR` (`IlivalidatorService`): das Verzeichnis der Transferdatei, also das Session-Verzeichnis des Aufrufs. Mitgesendete Dateien liegen in eigenen Unterordnern: Modell-Dateien in `%ITF_DIR/models`, das entpackte Repository-Archiv in `%ITF_DIR/repository` (siehe die beiden folgenden Abschnitte).
-    - `%XTF_DIR` (`Ili2gpkgService`): dasselbe Verzeichnis, mit denselben Unterordnern (`%XTF_DIR/models`, `%XTF_DIR/repository`).
+    - `%XTF_DIR` (`Ili2gpkgService`): dasselbe Verzeichnis, mit denselben Unterordnern (`%XTF_DIR/models`, `%XTF_DIR/repository`). Abweichend von den übrigen Platzhaltern ersetzt der Wrapper `%XTF_DIR` selbst durch das Session-Verzeichnis, weil ili2gpkg Platzhalter nur als ganze Einträge erkennt und deshalb `%XTF_DIR` mit Unterverzeichnissen verwirft.
     - `%ILI_FROM_DB` (`Ili2gpkgService`): das im GeoPackage selbst abgelegte Modell. Nötig, sobald `modelDirs` gesetzt ist, weil dieser Eintrag sonst mit dem Tool-Default verloren geht.
 - `%REPOSITORIES/<id>` (`IlivalidatorService` und `XtfDiffService`): ein Repository, das das Deployment anbietet. Diesen Platzhalter kennt das Tool nicht, der Wrapper ersetzt ihn durch das Verzeichnis des Repositorys (siehe [Angebotene Repositories](#angebotene-repositories)).
 
@@ -64,7 +64,7 @@ Das XTF-Diff-Tool kennt keine Platzhalter, es reicht `--modeldir` unverändert a
 
 Ein Verzeichnis-Eintrag wird vom Tool nicht rekursiv gescannt (gemessen an ilivalidator 1.15.0): `%ITF_DIR` sieht die Unterordner nicht, jede Quelle ist nur über ihren eigenen Eintrag sichtbar, und genau das macht ihre Reihenfolge konfigurierbar.
 
-Alles andere wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen oder ein Tool-Prozess gestartet wird: lokale Pfade, andere Schemas wie `file:`, URLs mit Zugangsdaten, Einträge mit dem Trennzeichen `;`, der Platzhalter des jeweils anderen Tools, ein `%REPOSITORIES/<id>`, das das Deployment nicht anbietet, sowie Unterpfade, die das Verzeichnis verlassen könnten (leere Segmente, `.` oder `..`, Backslashes). URLs, die in nicht öffentliche Adressbereiche auflösen (privat, Loopback, Link-Local, CGNAT, IPv6-ULA), werden ebenfalls abgelehnt; für Testumgebungen lässt sich das mit `MODELDIR_ALLOW_PRIVATE_NETWORKS=true` abschalten.
+Alles andere wird mit `INVALID_ARGUMENT` abgelehnt, bevor eine Datei entgegengenommen oder ein Tool-Prozess gestartet wird: lokale Pfade, andere Schemas wie `file:`, URLs mit Zugangsdaten, Einträge mit dem Trennzeichen `;`, der Platzhalter des jeweils anderen Tools, ein `%REPOSITORIES/<id>`, das das Deployment nicht anbietet, sowie Unterpfade, die das Verzeichnis verlassen könnten (leere Segmente, `.` oder `..`, Backslashes und Doppelpunkte). URLs, die in nicht öffentliche Adressbereiche auflösen (privat, Loopback, Link-Local, CGNAT, IPv6-ULA), werden ebenfalls abgelehnt; für Testumgebungen lässt sich das mit `MODELDIR_ALLOW_PRIVATE_NETWORKS=true` abschalten.
 
 Ein URL-Eintrag ist damit per Definition ein öffentlich erreichbares Repository. Nicht publizierte Repositories werden stattdessen im Request mitgesendet oder vom Deployment angeboten.
 

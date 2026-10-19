@@ -33,6 +33,7 @@ import java.lang.module.ModuleDescriptor;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -86,7 +87,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             @Nullable Timeout toolTimeout) {
         this.fileManager = fileManager;
         this.ilitoolsRunner = ilitoolsRunner;
-        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, repositoryCatalog, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
+        this.modelDirValidator = new ModelDirValidator(MODEL_DIR_PLACEHOLDERS, Map.of(), repositoryCatalog, privateNetworkPolicy, DEFAULT_MODEL_DIRS);
         this.pluginCatalog = pluginCatalog;
         this.toolTimeout = toolTimeout;
     }
@@ -390,7 +391,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             addArgument(args, "--metaConfig", requestInfo.getMetaConfig());
             addArgument(args, "--refmapping", refMappingArgument(requestInfo));
             addArgument(args, "--scope", requestInfo.getScope());
-            addArgument(args, "--plugins", materializePlugins(transferFile).map(Path::toString).orElse(""));
+            addArgument(args, "--plugins", materializePlugins().map(Path::toString).orElse(""));
 
             args.add(transferFile.filePath().toAbsolutePath().toString());
             return args;
@@ -413,18 +414,13 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
          * selection nothing is created and {@code --plugins} stays unset, which leaves the tool with its own
          * default; that default points into the tool installation, which carries no plugins.
          */
-        private Optional<Path> materializePlugins(ProcessingFile transferFile) {
+        private Optional<Path> materializePlugins() {
             if (requestedPlugins.isEmpty()) {
                 return Optional.empty();
             }
 
-            Path sessionDirectory = transferFile.filePath().toAbsolutePath().getParent();
-            if (sessionDirectory == null) {
-                throw new UncheckedIOException(new IOException("The transfer file " + transferFile.filePath() + " is not inside a session directory."));
-            }
-
             try {
-                return pluginCatalog.materialize(requestedPlugins, sessionDirectory);
+                return pluginCatalog.materialize(requestedPlugins, files.sessionDirectory());
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }

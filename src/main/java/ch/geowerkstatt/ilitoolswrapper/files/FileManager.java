@@ -1,6 +1,7 @@
 package ch.geowerkstatt.ilitoolswrapper.files;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -15,6 +16,14 @@ public interface FileManager {
      * @throws IOException if an I/O error occurs while creating the directories
      */
     void setupProcessingDirectory(String folderName, List<String> subfolders) throws IOException;
+
+    /**
+     * Returns the absolute path of the processing directory for a given folder name, whether or not it exists yet.
+     *
+     * @param folderName the name of the folder
+     * @return the absolute path of the processing directory
+     */
+    Path processingDirectory(String folderName);
 
     /**
      * Creates a temporary file for processing.
