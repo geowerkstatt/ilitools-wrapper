@@ -391,7 +391,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             addArgument(args, "--metaConfig", requestInfo.getMetaConfig());
             addArgument(args, "--refmapping", refMappingArgument(requestInfo));
             addArgument(args, "--scope", requestInfo.getScope());
-            addArgument(args, "--plugins", materializePlugins(transferFile).map(Path::toString).orElse(""));
+            addArgument(args, "--plugins", materializePlugins().map(Path::toString).orElse(""));
 
             args.add(transferFile.filePath().toAbsolutePath().toString());
             return args;
@@ -414,18 +414,13 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
          * selection nothing is created and {@code --plugins} stays unset, which leaves the tool with its own
          * default; that default points into the tool installation, which carries no plugins.
          */
-        private Optional<Path> materializePlugins(ProcessingFile transferFile) {
+        private Optional<Path> materializePlugins() {
             if (requestedPlugins.isEmpty()) {
                 return Optional.empty();
             }
 
-            Path sessionDirectory = transferFile.filePath().toAbsolutePath().getParent();
-            if (sessionDirectory == null) {
-                throw new UncheckedIOException(new IOException("The transfer file " + transferFile.filePath() + " is not inside a session directory."));
-            }
-
             try {
-                return pluginCatalog.materialize(requestedPlugins, sessionDirectory);
+                return pluginCatalog.materialize(requestedPlugins, files.sessionDirectory());
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
