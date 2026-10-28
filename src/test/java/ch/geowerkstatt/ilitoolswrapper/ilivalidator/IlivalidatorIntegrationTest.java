@@ -300,6 +300,17 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
     }
 
     @Test
+    public void testValidateLoadsReferenceDataSentInTheRequest() throws Exception {
+        ValidationResult withCatalog = validateWithReferenceDataFile(true, "refdata_file_log.xtf");
+        assertTrue(withCatalog.success, "The catalog in the request holds the referenced municipality, so the reference should resolve. Log:\n" + withCatalog.log);
+        assertTrue(withCatalog.log.contains("refDataFile <"), "Text log should name the reference data file. Log:\n" + withCatalog.log);
+
+        ValidationResult withoutCatalog = validateWithReferenceDataFile(false, "refdata_file_missing_log.xtf");
+        assertFalse(withoutCatalog.success, "Without the catalog the reference cannot resolve. Log:\n" + withoutCatalog.log);
+        assertTrue(withoutCatalog.log.contains("No object found with OID m449"), "Text log should report the unresolved reference. Log:\n" + withoutCatalog.log);
+    }
+
+    @Test
     public void testValidateReadsTheModelFromAnOfferedRepository() throws Exception {
         var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
         var call = client.validate();
@@ -713,6 +724,29 @@ public final class IlivalidatorIntegrationTest extends IlitoolsIntegrationTestBa
                 .setScope(scope)));
         writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_refdata.xtf");
         writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_refdata.ili");
+        call.halfClose();
+
+        return readResponse(call, xtfLogFileName);
+    }
+
+    /**
+     * Validates the delivery that references municipality m449, with the municipality optionally sent as a reference
+     * data file in the request instead of resolved through a mapping. No repository is involved.
+     */
+    private ValidationResult validateWithReferenceDataFile(
+            boolean sendCatalog,
+            String xtfLogFileName) throws StatusException, InterruptedException, IOException {
+        var client = IlivalidatorServiceGrpc.newBlockingV2Stub(channel);
+        var call = client.validate();
+
+        call.write(info(info -> info
+                .addModelDirs("%ITF_DIR/models")
+                .setAllObjectsAccessible(true)));
+        writeResourceFile(call, IlivalidatorFileType.TRANSFER_FILE_XTF, "ilivalidator/transfer_refdata.xtf");
+        writeResourceFile(call, IlivalidatorFileType.MODEL_FILE, "ilivalidator/model_refdata.ili");
+        if (sendCatalog) {
+            writeResourceFile(call, IlivalidatorFileType.REFERENCE_DATA_FILE, "repositories/repository/refdata_449.xtf");
+        }
         call.halfClose();
 
         return readResponse(call, xtfLogFileName);

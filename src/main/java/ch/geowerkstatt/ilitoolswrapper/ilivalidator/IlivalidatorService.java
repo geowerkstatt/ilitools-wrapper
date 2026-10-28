@@ -41,6 +41,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public final class IlivalidatorService extends IlivalidatorServiceGrpc.IlivalidatorServiceImplBase implements ServiceHealthCheck {
     // %ITF_DIR is the directory of the transfer file, which is the session directory of the request.
@@ -208,7 +209,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 case TRANSFER_FILE_ITF -> "itf";
                 case REPOSITORY_ARCHIVE -> "zip";
                 case MODEL_FILE -> "ili";
-                case REF_MAPPING_FILE -> "xtf";
+                case REF_MAPPING_FILE, REFERENCE_DATA_FILE -> "xtf";
                 default -> null;
             };
             if (extension == null) {
@@ -216,7 +217,8 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription("File has an invalid type."));
                 return;
             }
-            if (type == IlivalidatorFileType.REF_MAPPING_FILE && !acceptRefMappingFile()) {
+            boolean referenceDataFile = type == IlivalidatorFileType.REF_MAPPING_FILE || type == IlivalidatorFileType.REFERENCE_DATA_FILE;
+            if (referenceDataFile && !acceptReferenceDataFile(type)) {
                 return;
             }
 
@@ -390,6 +392,7 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
             addArgument(args, "--modeldir", modelDirArgument);
             addArgument(args, "--metaConfig", requestInfo.getMetaConfig());
             addArgument(args, "--refmapping", refMappingArgument(requestInfo));
+            addArgument(args, "--refdata", referenceDataArgument());
             addArgument(args, "--scope", requestInfo.getScope());
             addArgument(args, "--plugins", materializePlugins().map(Path::toString).orElse(""));
 
@@ -407,6 +410,13 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
                 throw new IllegalArgumentException("At most one REF_MAPPING_FILE can be sent.");
             }
             return mappingFiles.isEmpty() ? requestInfo.getRefMapping() : mappingFiles.getFirst().filePath().toAbsolutePath().toString();
+        }
+
+        /** The paths of all received reference data files, joined into the one value {@code --refdata} takes. */
+        private String referenceDataArgument() {
+            return files.getAll(IlivalidatorFileType.REFERENCE_DATA_FILE).stream()
+                    .map(file -> file.filePath().toAbsolutePath().toString())
+                    .collect(Collectors.joining(";"));
         }
 
         /**
@@ -462,18 +472,19 @@ public final class IlivalidatorService extends IlivalidatorServiceGrpc.Ilivalida
         }
 
         /**
-         * Rejects a mapping file at its start unless the request can use it, so that the content of an unusable mapping
-         * is never received. The tool takes one mapping option, so the info reference and the file exclude each other.
+         * Rejects a mapping or reference data file at its start unless the request can use it, so that the content of an
+         * unusable file is never received. The tool takes one mapping option, so the info reference and a mapping file
+         * exclude each other.
          */
-        private boolean acceptRefMappingFile() {
+        private boolean acceptReferenceDataFile(IlivalidatorFileType type) {
             try {
-                if (!Objects.requireNonNull(info).getRefMapping().isEmpty()) {
+                if (type == IlivalidatorFileType.REF_MAPPING_FILE && !Objects.requireNonNull(info).getRefMapping().isEmpty()) {
                     throw new IllegalArgumentException("The reference data mapping is sent either as refMapping or as a REF_MAPPING_FILE, not both.");
                 }
-                requireReferenceDataSupport(requestedToolVersion, "A REF_MAPPING_FILE requires");
+                requireReferenceDataSupport(requestedToolVersion, "A " + type + " requires");
                 return true;
             } catch (IllegalArgumentException e) {
-                LOGGER.warning("Rejected reference data mapping file: " + e.getMessage());
+                LOGGER.warning("Rejected reference data file: " + e.getMessage());
                 cancelWithError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
                 return false;
             } catch (IllegalStateException e) {
