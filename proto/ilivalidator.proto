@@ -25,6 +25,9 @@ enum IlivalidatorFileType {
   // Reference data mapping in the model IliVRefData_V1_0, passed as --refmapping in place of the refMapping field.
   // At most one, and only with refMapping empty. Needs ilivalidator 1.15.0 or newer, like scope.
   REF_MAPPING_FILE = 6;
+  // Reference data in XTF, for example a catalog, loaded next to the transfer file without being validated itself.
+  // Any number; all are passed together as --refdata, also next to a mapping. Needs ilivalidator 1.15.0 or newer.
+  REFERENCE_DATA_FILE = 7;
 }
 
 message IlivalidatorFileStart {

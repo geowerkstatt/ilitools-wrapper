@@ -629,6 +629,75 @@ public final class IlivalidatorServiceTest {
     }
 
     @Test
+    void validatePassesAllReferenceDataFilesAsOneArgument() {
+        ilitoolsRunner.useDefaultVersion("1.15.0");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        // The tool loads the reference data of a mapping and the explicit files together (measured with 1.15.0).
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setRefMapping("ilidata:DMAV_RefData_Mapping"))
+                .build());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
+        requestObserver.onNext(chunk("data"));
+        InMemoryProcessingFile transferFile = fileManager.lastCreatedFile();
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REFERENCE_DATA_FILE));
+        requestObserver.onNext(chunk("first catalog"));
+        InMemoryProcessingFile firstCatalog = fileManager.lastCreatedFile();
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REFERENCE_DATA_FILE));
+        requestObserver.onNext(chunk("second catalog"));
+        InMemoryProcessingFile secondCatalog = fileManager.lastCreatedFile();
+        requestObserver.onCompleted();
+
+        assertNull(responseObserver.error());
+        assertTrue(firstCatalog.filePath().toString().endsWith(".xtf"), "Reference data should be stored as an xtf file, but was " + firstCatalog.filePath());
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+
+        List<String> args = arguments.args();
+        assertArgumentWithValue(args, "--refdata", firstCatalog.filePath().toAbsolutePath() + ";" + secondCatalog.filePath().toAbsolutePath());
+        assertArgumentWithValue(args, "--refmapping", "ilidata:DMAV_RefData_Mapping");
+        assertEquals(transferFile.filePath().toAbsolutePath().toString(), args.getLast(), "The transfer file should stay the last, positional argument.");
+
+        assertHasResponses(true, IlivalidatorFileType.LOG_FILE, IlivalidatorFileType.XTF_LOG_FILE);
+    }
+
+    @Test
+    void referenceDataIsNotPassedWithoutAFile() {
+        ilitoolsRunner.useDefaultVersion("1.15.0");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(info());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.TRANSFER_FILE_XTF));
+        requestObserver.onNext(chunk("data"));
+        requestObserver.onCompleted();
+
+        IlitoolsRunnerMock.Arguments arguments = ilitoolsRunner.lastArguments();
+        assertNotNull(arguments, "The runner should have been invoked.");
+        assertFalse(arguments.args().contains("--refdata"), "Without a reference data file --refdata should not be passed.");
+    }
+
+    @Test
+    void referenceDataFileIsRejectedForAnOlderRequestedVersion() {
+        ilitoolsRunner.offerVersions("1.15.0", "1.14.4");
+        StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
+
+        requestObserver.onNext(ValidateRequest.newBuilder()
+                .setInfo(ValidateRequestInfo.newBuilder()
+                        .setToolVersion("1.14.4"))
+                .build());
+        requestObserver.onNext(fileStart(IlivalidatorFileType.REFERENCE_DATA_FILE));
+
+        assertNotNull(responseObserver.error());
+        assertEquals(Status.Code.INVALID_ARGUMENT, statusCodeOf(responseObserver.error()));
+        String description = Status.fromThrowable(responseObserver.error()).getDescription();
+        assertNotNull(description);
+        assertTrue(description.contains("REFERENCE_DATA_FILE") && description.contains("1.14.4"), "The rejection should name the file type and the version, but was: " + description);
+        assertTrue(fileManager.createdFiles().isEmpty(), "No file should be created for rejected reference data.");
+        assertNull(ilitoolsRunner.lastArguments(), "ilivalidator should not run for a rejected request.");
+    }
+
+    @Test
     void pluginsAreNotPassedWithoutASelection() {
         StreamObserver<ValidateRequest> requestObserver = service.validate(responseObserver);
 

@@ -211,7 +211,7 @@ Die `ValidateRequest`-Nachrichten müssen in folgender Reihenfolge gesendet werd
     1. Ein `IlivalidatorFileStart`, welcher den Dateityp definiert.
     2. Direkt anschliessend der jeweilige Dateiinhalt in einer oder mehreren `chunk`-Nachrichten.
 
-Erwartet wird genau eine Transferdatei, gesendet als `TRANSFER_FILE_XTF` oder `TRANSFER_FILE_ITF`, optional zusätzlich beliebig viele Modell-Dateien (`MODEL_FILE`, siehe [Einzelne Modell-Dateien mitsenden](#einzelne-modell-dateien-mitsenden)), ein `REPOSITORY_ARCHIVE` und eine Abbildungstabelle der Referenzdaten (`REF_MAPPING_FILE`, siehe [Referenzdaten](#referenzdaten)).
+Erwartet wird genau eine Transferdatei, gesendet als `TRANSFER_FILE_XTF` oder `TRANSFER_FILE_ITF`, optional zusätzlich beliebig viele Modell-Dateien (`MODEL_FILE`, siehe [Einzelne Modell-Dateien mitsenden](#einzelne-modell-dateien-mitsenden)), ein `REPOSITORY_ARCHIVE`, eine Abbildungstabelle der Referenzdaten (`REF_MAPPING_FILE`) und beliebig viele Referenzdaten-Dateien (`REFERENCE_DATA_FILE`), beide siehe [Referenzdaten](#referenzdaten).
 
 Der Transferdatei-Typ trägt das Format: Der Wrapper legt die Datei entsprechend als `fileN.xtf` bzw. `fileN.itf` ab, und die Unterscheidung existiert, weil das Tool nur bei der Endung `.itf` auf die INTERLIS-1-Semantik umschaltet (gemessen an ilivalidator 1.15.0: pro Tabelle eindeutige TIDs sind in ITF legal, scheitern aber unter einem `.xtf`-Namen). Eine INTERLIS-1-Lieferung sendet ihre Transferdatei deshalb als `TRANSFER_FILE_ITF`.
 
@@ -241,7 +241,7 @@ Dazu kommen `modelDirs` und `metaConfig`, siehe [Modell-Repositories und Profile
 
 ### Referenzdaten
 
-Referenzdaten lädt ilivalidator zusätzlich zur Transferdatei, prüft sie aber selbst nicht, etwa die Gemeinde, auf die eine Lieferung verweist. Welche es lädt, bestimmt eine Abbildungstabelle im Modell `IliVRefData_V1_0` (im Werkzeug enthalten): Jeder Eintrag nennt einen Validierungsumfang und/oder ein Topic sowie die URIs der Referenzdaten.
+Referenzdaten lädt ilivalidator zusätzlich zur Transferdatei, prüft sie aber selbst nicht, etwa die Gemeinde, auf die eine Lieferung verweist. Welche es lädt, bestimmt eine Abbildungstabelle im Modell `IliVRefData_V1_0` (im Werkzeug enthalten): Jeder Eintrag nennt einen Validierungsumfang und/oder ein Topic sowie die URIs der Referenzdaten. Zusätzlich oder stattdessen kann der Request Referenzdaten direkt als Dateien mitsenden (`REFERENCE_DATA_FILE`, siehe unten).
 
 | Feld | ilivalidator-Argument | Beschreibung |
 | --- | --- | --- |
@@ -250,11 +250,13 @@ Referenzdaten lädt ilivalidator zusätzlich zur Transferdatei, prüft sie aber 
 
 Statt über `refMapping` kann die Abbildungstabelle auch im Request mitkommen, als Datei vom Typ `REF_MAPPING_FILE` (eine Transferdatei im Modell `IliVRefData_V1_0`). Der Wrapper legt sie unter eigenem Namen (`fileN.xtf`) im Session-Verzeichnis ab und übergibt ihren Pfad als `--refmapping`; die Referenzdaten, die sie nennt, löst das Tool wie gewohnt über die `modelDirs` auf, etwa `ilidata:<DatasetId>`. Erlaubt ist höchstens eine Datei und nur mit leerem `refMapping`. Beides zusammen lehnt der Wrapper mit `INVALID_ARGUMENT` ab, bevor der Inhalt der Datei entgegengenommen wird, eine zweite Datei, bevor das Tool startet.
 
-Beide Felder und der Dateityp `REF_MAPPING_FILE` gibt es erst ab ilivalidator 1.15.0. Läuft eine ältere Version, über `toolVersion` gewählt oder als Voreinstellung des Deployments, lehnt der Wrapper den Request mit `INVALID_ARGUMENT` ab: die Felder, bevor eine Datei entgegengenommen wird, die Datei, bevor ihr Inhalt entgegengenommen wird. Das Werkzeug selbst würde die Option nicht ablehnen, sondern überspringen und ihren Wert samt allen folgenden Argumenten als Datendateien lesen (gemessen mit 1.14.4). Referenzen in die Referenzdaten prüft das Werkzeug nur mit `allObjectsAccessible`.
+Referenzdaten selbst, etwa ein Katalog, kommen als Dateien vom Typ `REFERENCE_DATA_FILE` (XTF; der Inhalt zählt, nicht die Endung, auch eine `.xml` wird so gelesen). Der Wrapper legt jede unter eigenem Namen (`fileN.xtf`) im Session-Verzeichnis ab und übergibt alle zusammen als `--refdata`. Erlaubt sind beliebig viele, auch neben einer Abbildungstabelle: das Tool lädt dann die Referenzdaten beider Quellen (gemessen mit 1.15.0). Welche Dateien es als Referenzdaten gelesen hat, steht im Text-Log, je mit einer Zeile `refDataFile <...>` und einer mit `fileVersion=<MD5 des Inhalts>`; über den Hash lässt sich eine mitgelieferte Datei dem Prüfresultat zuordnen, auch wenn der Pfad im Log ihren Wrapper-Namen trägt.
+
+Beide Felder und die Dateitypen `REF_MAPPING_FILE` und `REFERENCE_DATA_FILE` gibt es erst ab ilivalidator 1.15.0. Läuft eine ältere Version, über `toolVersion` gewählt oder als Voreinstellung des Deployments, lehnt der Wrapper den Request mit `INVALID_ARGUMENT` ab: die Felder, bevor eine Datei entgegengenommen wird, die Datei, bevor ihr Inhalt entgegengenommen wird. Das Werkzeug selbst würde die Option nicht ablehnen, sondern überspringen und ihren Wert samt allen folgenden Argumenten als Datendateien lesen (gemessen mit 1.14.4). Referenzen in die Referenzdaten prüft das Werkzeug nur mit `allObjectsAccessible`.
 
 Die Abbildungstabelle gehört in `refMapping`: Ein Schlüssel `refmapping` in der Meta-Konfiguration wirkt nicht (ilivalidator 1.15.0, gleiche Ursache wie [claeis/ilivalidator#458](https://github.com/claeis/ilivalidator/issues/458)).
 
-Wie beim [mitgesendeten Repository](#repository-im-request-mitsenden) entscheidet der Inhalt mit, was ein Prüfresultat bedeutet: Abbildungstabelle und Referenzdaten kommen unverändert aus den Repositories oder dem Request, und die URIs in der Tabelle prüft der Wrapper nicht (sie dürfen auch lokale Pfade nennen). Eine Abbildungstabelle stammt deshalb aus einem geprüften Repository oder, als `REF_MAPPING_FILE`, von einem Client, der ihren Inhalt verantwortet, nie aus einem Upload.
+Wie beim [mitgesendeten Repository](#repository-im-request-mitsenden) entscheidet der Inhalt mit, was ein Prüfresultat bedeutet: Abbildungstabelle und Referenzdaten kommen unverändert aus den Repositories oder dem Request, und die URIs in der Tabelle prüft der Wrapper nicht (sie dürfen auch lokale Pfade nennen). Eine Abbildungstabelle stammt deshalb aus einem geprüften Repository oder, als `REF_MAPPING_FILE`, von einem Client, der ihren Inhalt verantwortet, nie aus einem Upload. Eine `REFERENCE_DATA_FILE` dagegen nennt keine weiteren Quellen und darf auch aus einem Upload stammen. Gegen sie lösen sich die Referenzen der Lieferung aber auf: Ob ein mitgelieferter Katalog zählt, entscheidet, wer den Request zusammenstellt.
 
 ### Ablauf der Antwort
 
