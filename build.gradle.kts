@@ -216,8 +216,13 @@ listOf(tasks.run, tasks.test).forEach { task ->
 }
 
 // The plugin catalog of the tests is built, not shipped, so the test task builds it and tells the tests where
-// it is. Only `test` gets this; a real deployment configures ILIVALIDATOR_PLUGINS_DIR instead.
+// it is. Only `test` gets this; a real deployment configures ILITOOLS_PLUGINS_DIR instead.
 tasks.test {
     dependsOn(testPluginJar)
     environment("TEST_PLUGIN_CATALOG", testPluginCatalog.get().asFile.absolutePath)
+    // Gradle does not track environment variables as task inputs, so without these a tool version bump would leave
+    // the tests up-to-date and report the results of the previous versions.
+    inputs.property("ili2gpkgVersions", ili2gpkgVersions)
+    inputs.property("ilivalidatorVersions", ilivalidatorVersions)
+    inputs.property("xtfDiffVersion", xtfDiffVersion)
 }
